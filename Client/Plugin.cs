@@ -3,7 +3,7 @@ using BepInEx.Logging;
 
 namespace mizmii.ReClassic
 {
-    [BepInPlugin(Guid, "Re-Classic", "1.0.0")]
+    [BepInPlugin(Guid, "Re-Classic", "1.0.1")]
     [BepInDependency("xyz.drakia.searchopencontainers")]
     [BepInDependency("com.fika.core", BepInDependency.DependencyFlags.SoftDependency)]
     public class Plugin : BaseUnityPlugin

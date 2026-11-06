@@ -5,7 +5,7 @@
     <RootNamespace>mizmii.ReClassic</RootNamespace>
     <Nullable>disable</Nullable>
     <Authors>mizmii</Authors>
-    <AssemblyVersion>1.0.0</AssemblyVersion>
+    <AssemblyVersion>1.0.1</AssemblyVersion>
     <FileVersion>$(AssemblyVersion)</FileVersion>
     <Configurations>Debug;Release</Configurations>
     <Version>$(AssemblyVersion)</Version>
@@ -85,10 +85,6 @@
       <SpecificVersion>False</SpecificVersion>
       <HintPath>C:\spt41\EscapeFromTarkov_Data\Managed\UnityEngine.TextRenderingModule.dll</HintPath>
     </Reference>
-    <Reference Include="Fika.Core">
-      <HintPath>C:\spt41\BepInEx\plugins\Fika\Fika.Core.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
     <Reference Include="ItemComponent.Types">
       <HintPath>C:\spt41\EscapeFromTarkov_Data\Managed\ItemComponent.Types.dll</HintPath>
     </Reference>
@@ -112,6 +108,11 @@
     <EmbeddedResource Include="..\Resources\**\*.wav" LogicalName="ReClassic.Resources.%(Filename)%(Extension)" />
     <EmbeddedResource Include="..\Resources\**\*.png" LogicalName="ReClassic.Resources.%(Filename)%(Extension)" />
     <EmbeddedResource Include="..\Resources\footsteps.bundle" LogicalName="ReClassic.Resources.footsteps.bundle" />
+    <EmbeddedResource Include="..\Fika\bin\$(Configuration)\netstandard2.1\ReClassic.Fika.dll" LogicalName="ReClassic.Fika.dll" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Fika\ReClassic.Fika.csproj" ReferenceOutputAssembly="false" Private="false" />
   </ItemGroup>
 
   <Target Name="PostBuild" AfterTargets="PostBuildEvent">

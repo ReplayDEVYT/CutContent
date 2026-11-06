@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <RootNamespace>ReClassic</RootNamespace>
-    <Version>1.0.0</Version>
+    <Version>1.0.1</Version>
     <Authors>mizmii</Authors>
     <Company>mizmii</Company>
     <Product>Re-Classic</Product>

@@ -1,12 +1,7 @@
 using BepInEx.Bootstrap;
-using Fika.Core.Main.Utils;
-using Fika.Core.Modding;
-using Fika.Core.Modding.Events;
-using Fika.Core.Networking;
-using Fika.Core.Networking.LiteNetLib;
-using Fika.Core.Networking.LiteNetLib.Utils;
 using System;
-using System.Runtime.CompilerServices;
+using System.IO;
+using System.Reflection;
 using UnityEngine;
 
 namespace mizmii.ReClassic.Sync
@@ -14,6 +9,8 @@ namespace mizmii.ReClassic.Sync
     internal static class FikaSync
     {
         public const string FikaGuid = "com.fika.core";
+        private const string BridgeResource = "ReClassic.Fika.dll";
+        private const string BridgeType = "mizmii.ReClassic.Fika.FikaBridge";
 
         public static bool Present => Chainloader.PluginInfos.ContainsKey(FikaGuid);
 
@@ -25,7 +22,17 @@ namespace mizmii.ReClassic.Sync
             }
             try
             {
-                Hook();
+                Assembly bridge = LoadBridge();
+                MethodInfo init = bridge.GetType(BridgeType, true).GetMethod("Init", BindingFlags.Public | BindingFlags.Static);
+                Func<string> snapshot = SettingsSync.Snapshot;
+                Action<string> applyHost = SettingsSync.ApplyHost;
+                Action lockCurrent = SettingsSync.LockCurrent;
+                Action unlock = SettingsSync.Unlock;
+                Action<bool> setAlarmsFromHost = value => Patches.WorldInteractions.AlarmsFromHost = value;
+                Action<Vector3, int> playRemoteAlarm = Patches.WorldInteractions.PlayRemoteAlarm;
+                Action<string> logError = message => Plugin.LogSource.LogError(message);
+                var sendAlarm = (Action<Vector3, int>)init.Invoke(null, new object[] { snapshot, applyHost, lockCurrent, unlock, setAlarmsFromHost, playRemoteAlarm, logError });
+                Patches.WorldInteractions.AlarmStarted += sendAlarm;
                 Plugin.LogSource.LogInfo("[Fika] Fika found, car alarms and settings will follow the match host.");
             }
             catch (Exception e)
@@ -34,133 +41,20 @@ namespace mizmii.ReClassic.Sync
             }
         }
 
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        private static void Hook()
+        private static Assembly LoadBridge()
         {
-            FikaBridge.Init();
-        }
-    }
-
-    internal sealed class SettingsPacket : INetSerializable
-    {
-        public string Data = string.Empty;
-
-        public void Serialize(NetDataWriter writer)
-        {
-            writer.Put(Data);
-        }
-
-        public void Deserialize(NetDataReader reader)
-        {
-            Data = reader.GetString();
-        }
-    }
-
-    internal sealed class CarAlarmPacket : INetSerializable
-    {
-        public Vector3 Position;
-        public int Clip;
-
-        public void Serialize(NetDataWriter writer)
-        {
-            writer.Put(Position.x);
-            writer.Put(Position.y);
-            writer.Put(Position.z);
-            writer.Put(Clip);
-        }
-
-        public void Deserialize(NetDataReader reader)
-        {
-            Position = new Vector3(reader.GetFloat(), reader.GetFloat(), reader.GetFloat());
-            Clip = reader.GetInt();
-        }
-    }
-
-    internal static class FikaBridge
-    {
-        private static IFikaNetworkManager _manager;
-
-        public static void Init()
-        {
-            FikaEventDispatcher.SubscribeEvent<FikaNetworkManagerCreatedEvent>(OnCreated);
-            FikaEventDispatcher.SubscribeEvent<FikaNetworkManagerDestroyedEvent>(OnDestroyed);
-            FikaEventDispatcher.SubscribeEvent<FikaGameEndedEvent>(OnGameEnded);
-            FikaEventDispatcher.SubscribeEvent<PeerConnectedEvent>(OnPeerConnected);
-            Patches.WorldInteractions.AlarmStarted += OnAlarmStarted;
-        }
-
-        private static void OnCreated(FikaNetworkManagerCreatedEvent e)
-        {
-            _manager = e.Manager;
-            try
+            using (Stream stream = typeof(FikaSync).Assembly.GetManifestResourceStream(BridgeResource))
             {
-                _manager.RegisterPacket<SettingsPacket>(OnSettings);
-                _manager.RegisterPacket<CarAlarmPacket>(OnCarAlarm);
+                if (stream == null)
+                {
+                    throw new FileNotFoundException("The Fika bridge is missing from the plugin.");
+                }
+                using (var memory = new MemoryStream())
+                {
+                    stream.CopyTo(memory);
+                    return Assembly.Load(memory.ToArray());
+                }
             }
-            catch (Exception ex)
-            {
-                Plugin.LogSource.LogError($"[Fika] Could not register Re-Classic packets: {ex}");
-            }
-            if (FikaBackendUtils.IsServer)
-            {
-                Patches.WorldInteractions.AlarmsFromHost = false;
-                SettingsSync.LockCurrent();
-            }
-            else
-            {
-                Patches.WorldInteractions.AlarmsFromHost = true;
-            }
-        }
-
-        private static void OnDestroyed(FikaNetworkManagerDestroyedEvent e)
-        {
-            _manager = null;
-            Patches.WorldInteractions.AlarmsFromHost = false;
-            SettingsSync.Unlock();
-        }
-
-        private static void OnGameEnded(FikaGameEndedEvent e)
-        {
-            Patches.WorldInteractions.AlarmsFromHost = false;
-            SettingsSync.Unlock();
-        }
-
-        private static void OnPeerConnected(PeerConnectedEvent e)
-        {
-            if (!FikaBackendUtils.IsServer || e.NetworkManager == null || e.Peer == null)
-            {
-                return;
-            }
-            var packet = new SettingsPacket { Data = SettingsSync.Snapshot() };
-            e.NetworkManager.SendDataToPeer(ref packet, DeliveryMethod.ReliableOrdered, e.Peer);
-        }
-
-        private static void OnAlarmStarted(Vector3 position, int clip)
-        {
-            if (_manager == null || !FikaBackendUtils.IsServer)
-            {
-                return;
-            }
-            var packet = new CarAlarmPacket { Position = position, Clip = clip };
-            _manager.SendData(ref packet, DeliveryMethod.ReliableOrdered);
-        }
-
-        private static void OnSettings(SettingsPacket packet)
-        {
-            if (FikaBackendUtils.IsServer)
-            {
-                return;
-            }
-            SettingsSync.ApplyHost(packet.Data);
-        }
-
-        private static void OnCarAlarm(CarAlarmPacket packet)
-        {
-            if (FikaBackendUtils.IsServer)
-            {
-                return;
-            }
-            Patches.WorldInteractions.PlayRemoteAlarm(packet.Position, packet.Clip);
         }
     }
 }
