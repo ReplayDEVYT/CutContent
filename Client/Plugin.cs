@@ -1,21 +1,148 @@
 using BepInEx;
 using BepInEx.Logging;
 
-namespace mizmii.CutContent
+namespace mizmii.ReClassic
 {
-    [BepInPlugin("mizmii.CutContent", "CutContent", "1.0.0")]
+    [BepInPlugin(Guid, "Re-Classic", "1.0.0")]
+    [BepInDependency("xyz.drakia.searchopencontainers")]
+    [BepInDependency("com.fika.core", BepInDependency.DependencyFlags.SoftDependency)]
     public class Plugin : BaseUnityPlugin
     {
+        public const string Guid = "com.mizmii.reclassic";
+
         public static ManualLogSource LogSource;
 
         private void Awake()
         {
             LogSource = Logger;
-            LogSource.LogInfo("CutContent loaded!");
+            LogSource.LogInfo("Re-Classic loaded!");
+            MigrateOldConfig();
+            Sync.SettingsSync.Init(Config);
 
-            // Enable your patches here. Each patch class inherits ModulePatch.
-            // Uncomment the line below to enable the example patch:
-            // new Patches.ExamplePatch().Enable();
+            Start("Interaction Focus", () =>
+            {
+                Patches.InteractionFocus.Enable(Config);
+            });
+            Start("Open Containers", () =>
+            {
+                Patches.NoContainerInventoryPatch.Bind(Config);
+                new Patches.NoContainerInventoryPatch().Enable();
+            });
+            Start("PropPhysics", () =>
+            {
+                Patches.PropPhysics.Enable(Config);
+            });
+            Start("WorldInteractions", () =>
+            {
+                Patches.WorldInteractions.Enable(Config);
+            });
+            Start("DoorPhysics", () => Patches.DoorPhysics.Enable(Config));
+            Start("Footsteps", () => Patches.Footsteps.Enable(Config));
+            Start("Acoustics", () =>
+            {
+                Patches.Acoustics.Enable(Config);
+            });
+            Start("FragmentDamage", () =>
+            {
+                Patches.FragmentDamage.Enable(Config);
+            });
+            Start("AimPunch", () =>
+            {
+                Patches.AimPunch.Enable(Config);
+            });
+            Start("Movement", () =>
+            {
+                Patches.Movement.Enable(Config);
+            });
+            Start("WeaponHandling", () =>
+            {
+                Patches.WeaponHandling.Enable(Config);
+            });
+            Start("LegIK", () =>
+            {
+                Patches.LegIK.Enable(Config);
+            });
+            Start("Bobbing", () =>
+            {
+                Patches.Bobbing.Enable(Config);
+            });
+            Start("Visuals", () =>
+            {
+                Patches.Visuals.Enable(Config);
+            });
+            Start("Scopes", () =>
+            {
+                Patches.Scopes.Enable(Config);
+            });
+            Start("AlphaLighting", () =>
+            {
+                Patches.AlphaLighting.Enable(Config);
+            });
+            Start("Auctions", () =>
+            {
+                Auctions.Auctions.Enable(Config);
+            });
+            Start("FeatureSettingsTab", () =>
+            {
+                Patches.FeatureSettingsTab.Enable();
+            });
+            Start("Fika", () =>
+            {
+                Sync.FikaSync.Init();
+            });
+            Start("WelcomePopup", () =>
+            {
+                Patches.WelcomePopup.Enable(Config);
+            });
+        }
+
+        private static void Start(string feature, System.Action enable)
+        {
+            try
+            {
+                enable();
+            }
+            catch (System.Exception e)
+            {
+                LogSource.LogError($"Could not start {feature}: {e}");
+            }
+        }
+
+        private void MigrateOldConfig()
+        {
+            try
+            {
+                bool reload = MoveFile(Guid + ".cfg", "mizmii.ReClassic.cfg", "mizmii.CutContent.cfg");
+                MoveFile(Guid + ".PropFilters.json", "mizmii.ReClassic.PropFilters.json", "mizmii.CutContent.PropFilters.json");
+                if (reload)
+                {
+                    Config.Reload();
+                    LogSource.LogInfo("Moved the old Re-Classic settings over to " + Guid + ".cfg.");
+                }
+            }
+            catch (System.Exception e)
+            {
+                LogSource.LogWarning($"Could not move the old Re-Classic settings: {e.Message}");
+            }
+        }
+
+        private static bool MoveFile(string newName, params string[] oldNames)
+        {
+            string newPath = System.IO.Path.Combine(BepInEx.Paths.ConfigPath, newName);
+            if (System.IO.File.Exists(newPath))
+            {
+                return false;
+            }
+            foreach (string oldName in oldNames)
+            {
+                string oldPath = System.IO.Path.Combine(BepInEx.Paths.ConfigPath, oldName);
+                if (System.IO.File.Exists(oldPath))
+                {
+                    System.IO.File.Move(oldPath, newPath);
+                    return true;
+                }
+            }
+            return false;
         }
     }
 }

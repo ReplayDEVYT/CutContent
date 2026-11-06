@@ -4,12 +4,12 @@ using SPTarkov.Server.Core.DI;
 using SPTarkov.Server.Core.Models.Spt.Mod;
 using SPTarkov.Server.Core.Models.Spt.Tables;
 
-namespace CutContent;
+namespace ReClassic;
 
 public record ModMetadata : IModMetadata
 {
-    public string ModGuid { get; init; } = "com.mizmii.CutContent";
-    public string Name { get; init; } = "CutContent";
+    public string ModGuid { get; init; } = "com.mizmii.reclassic";
+    public string Name { get; init; } = "Re-Classic";
     public string Author { get; init; } = "mizmii";
     public List<string>? Contributors { get; init; }
     public SemanticVersioning.Version Version { get; init; } = new("1.0.0");
@@ -23,8 +23,8 @@ public record ModMetadata : IModMetadata
 
 // Database tables are ready at Preload. Make item changes before profiles load.
 [Injectable(TypePriority = OnLoadOrder.Preload + 1)]
-public class CutContentMod(
-    ISptLogger<CutContentMod> logger,
+public class ReClassicMod(
+    ISptLogger<ReClassicMod> logger,
     GlobalTable globalTable,
     HideoutTable hideoutTable,
     BotTable botTable) : IOnLoad
@@ -34,7 +34,7 @@ public class CutContentMod(
         EditGlobals();
         EditHideout();
         EditBots();
-        logger.Success("CutContent finished editing the database!");
+        logger.Success("Re-Classic finished editing the database!");
         return Task.CompletedTask;
     }
 

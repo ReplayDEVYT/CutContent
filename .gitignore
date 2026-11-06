@@ -5,3 +5,14 @@
 *.user
 *.suo
 *.zip
+[Rr]ef/
+
+Tools/StepsBundle/Library/
+Tools/StepsBundle/Temp/
+Tools/StepsBundle/Logs/
+Tools/StepsBundle/Output/
+Tools/StepsBundle/UserSettings/
+Tools/StepsBundle/obj/
+Tools/StepsBundle/*.log
+Tools/StepsBundle/*.csproj
+Tools/StepsBundle/*.sln
