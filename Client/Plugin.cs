@@ -3,7 +3,7 @@ using BepInEx.Logging;
 
 namespace mizmii.ReClassic
 {
-    [BepInPlugin(Guid, "Re-Classic", "1.0.1")]
+    [BepInPlugin(Guid, "Re-Classic", "1.1.0")]
     [BepInDependency("xyz.drakia.searchopencontainers")]
     [BepInDependency("com.fika.core", BepInDependency.DependencyFlags.SoftDependency)]
     public class Plugin : BaseUnityPlugin
@@ -19,6 +19,8 @@ namespace mizmii.ReClassic
             MigrateOldConfig();
             Sync.SettingsSync.Init(Config);
 
+            Start("Effects", () => Effects.CustomEffects.Enable());
+            Start("Unconsciousness", () => Consciousness.Consciousness.Enable(Config));
             Start("Interaction Focus", () =>
             {
                 Patches.InteractionFocus.Enable(Config);
@@ -82,6 +84,10 @@ namespace mizmii.ReClassic
             {
                 Auctions.Auctions.Enable(Config);
             });
+            Start("Repair Time", () => Repairs.RepairTime.Enable(Config));
+            Start("Body Search", () => Patches.BodySearch.Enable(Config));
+            Start("Item Usage Bar", () => Patches.UsingBar.Enable(Config));
+            Start("Looting Animations", () => Patches.LootAnimations.Enable(Config));
             Start("FeatureSettingsTab", () =>
             {
                 Patches.FeatureSettingsTab.Enable();

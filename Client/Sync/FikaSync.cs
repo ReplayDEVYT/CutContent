@@ -33,6 +33,15 @@ namespace mizmii.ReClassic.Sync
                 Action<string> logError = message => Plugin.LogSource.LogError(message);
                 var sendAlarm = (Action<Vector3, int>)init.Invoke(null, new object[] { snapshot, applyHost, lockCurrent, unlock, setAlarmsFromHost, playRemoteAlarm, logError });
                 Patches.WorldInteractions.AlarmStarted += sendAlarm;
+                Type bridgeType = bridge.GetType(BridgeType, true);
+                var send = (Action<byte, string, string, float[], string, bool>)Delegate.CreateDelegate(typeof(Action<byte, string, string, float[], string, bool>), bridgeType.GetMethod("Send"));
+                var isServer = (Func<bool>)Delegate.CreateDelegate(typeof(Func<bool>), bridgeType.GetMethod("IsServer"));
+                var connected = (Func<bool>)Delegate.CreateDelegate(typeof(Func<bool>), bridgeType.GetMethod("Connected"));
+                var headless = (Func<bool>)Delegate.CreateDelegate(typeof(Func<bool>), bridgeType.GetMethod("IsHeadless"));
+                Action<byte, string, string, float[], string> receive = Consciousness.Coop.Receive;
+                bridgeType.GetMethod("SetMessageHandler").Invoke(null, new object[] { receive });
+                var extracted = (Func<string, bool>)Delegate.CreateDelegate(typeof(Func<string, bool>), bridgeType.GetMethod("IsExtracted"));
+                Consciousness.Coop.Attach(send, isServer, connected, headless, extracted);
                 Plugin.LogSource.LogInfo("[Fika] Fika found, car alarms and settings will follow the match host.");
             }
             catch (Exception e)

@@ -32,6 +32,44 @@ namespace mizmii.ReClassic.Patches
             public bool Logged;
             public bool CameraOnBody;
             public float OriginalWeight = -1f;
+            public float Weight;
+            public bool MaskLogged;
+            public float UngroundedFor;
+            public bool ResetWhileAirborne;
+        }
+
+        private static int _groundMask;
+
+        private static int GroundMask()
+        {
+            if (_groundMask == 0)
+            {
+                int excluded = (1 << LayersMaskController.DeadbodyLayer) | LayersMaskController.LootLayerMask.value | LayersMaskController.TriggersMask.value | LayersMaskController.PlayerMask.value;
+                _groundMask = (LayersMaskController.PlayerStaticCollisionsMask.value | LayersMaskController.TerrainLowPoly.value) & ~excluded;
+            }
+            return _groundMask;
+        }
+
+        private static bool Airborne(Player player, GrounderFBBIK grounder, State state)
+        {
+            if (grounder.solver.layers.value == 0)
+            {
+                return true;
+            }
+            MovementContext context = player.MovementContext;
+            if (context == null)
+            {
+                return false;
+            }
+            switch (context.CurrentState?.Name)
+            {
+                case EPlayerState.Jump:
+                case EPlayerState.FallDown:
+                case EPlayerState.VaultingFallDown:
+                    return true;
+            }
+            state.UngroundedFor = context.IsGrounded ? 0f : state.UngroundedFor + Time.deltaTime;
+            return state.UngroundedFor > 0.2f;
         }
 
         private static readonly ConditionalWeakTable<Player, State> States = new ConditionalWeakTable<Player, State>();
@@ -91,6 +129,25 @@ namespace mizmii.ReClassic.Patches
             {
                 state.Active = true;
                 state.OriginalWeight = ik.solver.IKPositionWeight;
+                state.Weight = 0f;
+                grounder.ResetPosition();
+            }
+
+            bool airborne = Airborne(player, grounder, state);
+            if (!state.MaskLogged && player.IsYourPlayer && grounder.solver.layers.value != 0)
+            {
+                state.MaskLogged = true;
+                Plugin.LogSource.LogInfo($"Leg IK: grounding layers {grounder.solver.layers.value:X} -> {GroundMask():X}.");
+            }
+            grounder.solver.layers = GroundMask();
+            state.Weight = Mathf.MoveTowards(state.Weight, airborne ? 0f : 1f, Time.deltaTime * (airborne ? 5f : 3f));
+            if (!airborne)
+            {
+                state.ResetWhileAirborne = false;
+            }
+            else if (state.Weight <= 0f && !state.ResetWhileAirborne)
+            {
+                state.ResetWhileAirborne = true;
                 grounder.ResetPosition();
             }
 
@@ -103,7 +160,7 @@ namespace mizmii.ReClassic.Patches
                 grounder.solver.maxStep = Mathf.Lerp(0.25f, 0.4f, pose);
             }
             grounder.solver.lowerPelvisWeight = player.GrounderBlender.Value;
-            grounder.weight = 1f;
+            grounder.weight = Mathf.SmoothStep(0f, 1f, state.Weight);
             ik.solver.IKPositionWeight = 1f;
             return true;
         }
@@ -166,6 +223,10 @@ namespace mizmii.ReClassic.Patches
 
         private static bool Run(Player __instance, float distance)
             {
+                if (Consciousness.Coop.IsDown(__instance))
+                {
+                    return false;
+                }
                 FullBodyBipedIK ik = PlayerFbbik(__instance);
                 GrounderFBBIK grounder = __instance.Grounder;
                 if (ik == null || grounder == null)

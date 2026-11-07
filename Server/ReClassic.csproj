@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <RootNamespace>ReClassic</RootNamespace>
-    <Version>1.0.1</Version>
+    <Version>1.1.0</Version>
     <Authors>mizmii</Authors>
     <Company>mizmii</Company>
     <Product>Re-Classic</Product>
@@ -50,6 +50,7 @@
 
     <MakeDir Directories="$(TempPackageDir)\BepInEx\plugins" />
     <Copy SourceFiles="$(ProjectDir)..\Client\bin\$(Configuration)\netstandard2.1\$(AssemblyName).dll" DestinationFolder="$(TempPackageDir)\BepInEx\plugins" />
+    <Copy SourceFiles="$(ProjectDir)..\Client\bin\$(Configuration)\netstandard2.1\EFTEffectManager.dll" DestinationFolder="$(TempPackageDir)\BepInEx\plugins" />
     <ZipDirectory SourceDirectory="$(TempPackageDir)" DestinationFile="$(ProjectDir)..\$(ZipFileName)" Overwrite="true" />
 
     <RemoveDir Directories="$(TempPackageDir)" />

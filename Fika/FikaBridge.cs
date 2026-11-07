@@ -44,8 +44,105 @@ namespace mizmii.ReClassic.Fika
         }
     }
 
+    public sealed class MessagePacket : INetSerializable
+    {
+        public byte Kind;
+        public string Target = string.Empty;
+        public string Source = string.Empty;
+        public float[] Values = Array.Empty<float>();
+        public string Extra = string.Empty;
+
+        public void Serialize(NetDataWriter writer)
+        {
+            writer.Put(Kind);
+            writer.Put(Target ?? string.Empty);
+            writer.Put(Source ?? string.Empty);
+            float[] values = Values ?? Array.Empty<float>();
+            writer.Put(values.Length);
+            for (int i = 0; i < values.Length; i++)
+            {
+                writer.Put(values[i]);
+            }
+            writer.Put(Extra ?? string.Empty);
+        }
+
+        public void Deserialize(NetDataReader reader)
+        {
+            Kind = reader.GetByte();
+            Target = reader.GetString();
+            Source = reader.GetString();
+            int count = reader.GetInt();
+            Values = new float[Math.Max(0, Math.Min(count, 256))];
+            for (int i = 0; i < Values.Length; i++)
+            {
+                Values[i] = reader.GetFloat();
+            }
+            Extra = reader.GetString();
+        }
+    }
+
     public static class FikaBridge
     {
+        private static Action<byte, string, string, float[], string> _onMessage;
+
+        public static void SetMessageHandler(Action<byte, string, string, float[], string> handler)
+        {
+            _onMessage = handler;
+        }
+
+        public static bool Connected()
+        {
+            return _manager != null;
+        }
+
+        public static bool IsServer()
+        {
+            return FikaBackendUtils.IsServer;
+        }
+
+        public static bool IsHeadless()
+        {
+            return FikaBackendUtils.IsHeadless;
+        }
+
+        public static bool IsExtracted(string profileId)
+        {
+            if (string.IsNullOrEmpty(profileId) || !global::Fika.Core.Main.Components.CoopHandler.TryGetCoopHandler(out var handler) || handler.ExtractedPlayers == null)
+            {
+                return false;
+            }
+            foreach (var pair in handler.Players)
+            {
+                if (pair.Value != null && pair.Value.ProfileId == profileId)
+                {
+                    return handler.ExtractedPlayers.Contains(pair.Value.NetId);
+                }
+            }
+            return false;
+        }
+
+        public static void Send(byte kind, string target, string source, float[] values, string extra, bool reliable)
+        {
+            if (_manager == null)
+            {
+                return;
+            }
+            var packet = new MessagePacket { Kind = kind, Target = target, Source = source, Values = values ?? Array.Empty<float>(), Extra = extra };
+            _manager.SendData(ref packet, reliable ? DeliveryMethod.ReliableOrdered : DeliveryMethod.Sequenced, true);
+        }
+
+        private static void OnMessage(MessagePacket packet)
+        {
+            try
+            {
+                _onMessage?.Invoke(packet.Kind, packet.Target, packet.Source, packet.Values, packet.Extra);
+            }
+            catch (Exception ex)
+            {
+                _logError?.Invoke($"[Fika] Could not handle a Re-Classic message: {ex}");
+            }
+        }
+
         private static IFikaNetworkManager _manager;
         private static Func<string> _snapshot;
         private static Action<string> _applyHost;
@@ -78,6 +175,7 @@ namespace mizmii.ReClassic.Fika
             {
                 _manager.RegisterPacket<SettingsPacket>(OnSettings);
                 _manager.RegisterPacket<CarAlarmPacket>(OnCarAlarm);
+                _manager.RegisterPacket<MessagePacket>(OnMessage);
             }
             catch (Exception ex)
             {
