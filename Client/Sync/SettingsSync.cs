@@ -31,7 +31,7 @@ namespace mizmii.ReClassic.Sync
         {
             string section = entry.Definition.Section;
             string key = entry.Definition.Key;
-            if (section == "Hidden" || section.StartsWith("Prop Physics", StringComparison.Ordinal))
+            if (section == "Hidden" || section.StartsWith("Prop Physics", StringComparison.Ordinal) || section.EndsWith(" - Debug", StringComparison.Ordinal))
             {
                 return false;
             }

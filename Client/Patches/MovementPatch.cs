@@ -62,6 +62,8 @@ namespace mizmii.ReClassic.Patches
             _diveSteering = config.Bind(section, "Dive Nudge", 2f, ConfigHelper.Advanced("How hard A and D redirect a dive.", new AcceptableValueRange<float>(0f, 20f)));
 
             _alphaTwist = config.Bind(section, "Alpha Body Twist", true, "Restores the alpha's 55 degree upper body twist (45 now), so you can watch an angle further before your legs turn and shift your position.");
+            ConfigHelper.Requires(_alphaMovement, _alphaWalkSpeed, _alphaSprintSpeed);
+            ConfigHelper.Requires(_slideMomentum, _slideFriction, _slideSteering, _slideBrake);
 
             _enabled.SettingChanged += (s, e) => { RefreshInertia(); ApplyHardSettings(); };
             _alphaTwist.SettingChanged += (s, e) => ApplyHardSettings();

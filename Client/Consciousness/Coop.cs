@@ -26,7 +26,11 @@ namespace mizmii.ReClassic.Consciousness
         Reviving = 6,
         Sleep = 7,
         Gone = 8,
-        Time = 9
+        Time = 9,
+        Mortar = 10,
+        RaidClock = 11,
+        Karma = 12,
+        KarmaNotice = 13
     }
 
     internal static class Coop
@@ -224,6 +228,24 @@ namespace mizmii.ReClassic.Consciousness
                         SleepGodMode = false;
                         TimeSkip.SetTo(new DateTime(ticks, DateTimeKind.Utc));
                     }
+                    break;
+                case CoopMessage.Mortar:
+                    if (values != null && values.Length >= 3)
+                    {
+                        Raid.Mortars.Explode(new Vector3(values[0], values[1], values[2]));
+                    }
+                    break;
+                case CoopMessage.RaidClock:
+                    if (!IsServer)
+                    {
+                        Raid.RaidTimers.OnRemoteClock(extra);
+                    }
+                    break;
+                case CoopMessage.Karma:
+                    Karma.KarmaClient.OnRemoteKarma(target, values, extra);
+                    break;
+                case CoopMessage.KarmaNotice:
+                    Karma.KarmaClient.OnRemoteNotice(target, extra);
                     break;
                 case CoopMessage.Gone:
                     Down.Remove(target);

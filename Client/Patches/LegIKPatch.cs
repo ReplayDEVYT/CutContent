@@ -83,6 +83,7 @@ namespace mizmii.ReClassic.Patches
             _cameraFollows = config.Bind(section, "Camera Follows Body", true, "Your view rises and dips with your body as the legs adapt to the ground, like the alpha.");
             _others = config.Bind(section, "Other Players", true, "Bots and other players (including Fika players) also get leg grounding.");
             _othersRange = config.Bind(section, "Other Players Range", 30f, ConfigHelper.Advanced("Other players further away than this (metres) skip leg grounding.", new AcceptableValueRange<float>(5f, 100f)));
+            ConfigHelper.Requires(_others, _othersRange);
 
             new FbbikUpdatePatch().Enable();
             new CameraTargetPatch().Enable();

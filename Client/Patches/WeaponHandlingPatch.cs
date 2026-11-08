@@ -92,6 +92,7 @@ namespace mizmii.ReClassic.Patches
             _swayWeightInfluence = config.Bind(section, "Sway Weight Influence", 1f, ConfigHelper.Advanced("How much weapon weight adds to sway when Alpha Sway is off. 0 makes every weapon sway like a light one.", new AcceptableValueRange<float>(0f, 1f)));
             _displacementMultiplier = config.Bind(section, "Weapon Lag Multiplier", 1f, ConfigHelper.Advanced("Scales how far the weapon lags behind your movement when Alpha Sway is off.", new AcceptableValueRange<float>(0f, 2f)));
             _aimSwayMultiplier = config.Bind(section, "Aim Drift Multiplier", 1f, ConfigHelper.Advanced("Scales the drift of heavy, low-ergonomics weapons while aiming when Alpha Sway is off.", new AcceptableValueRange<float>(0f, 2f)));
+            ConfigHelper.Requires(_alphaRecoil, _oldRecoilStrength, _oldRecoilReturn);
 
             AlphaHandling.Enable(config, _swayMultiplier);
             _swayMultiplier.SettingChanged += (s, e) => RefreshWeapon();

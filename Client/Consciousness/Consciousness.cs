@@ -33,6 +33,7 @@ namespace mizmii.ReClassic.Consciousness
         private static ConfigEntry<float> _simulationSpeed;
         private static ConfigEntry<float> _followerRadius;
         private static ConfigEntry<float> _dropChance;
+        private static ConfigEntry<bool> _robbing;
 
         public static bool Enabled => _enabled.Value;
         public static float DizzinessRate => _dizzinessRate.Value;
@@ -43,6 +44,7 @@ namespace mizmii.ReClassic.Consciousness
         public static float SimulationSpeed => _simulationSpeed.Value;
         public static float FollowerRadius => _followerRadius.Value;
         public static float DropChance => _dropChance.Value;
+        public static bool Robbing => _robbing.Value;
         public static float Cooldown => _cooldown.Value;
         public static float RandomStagger()
         {
@@ -79,7 +81,7 @@ namespace mizmii.ReClassic.Consciousness
         public static void Enable(ConfigFile config)
         {
             _enabled = ConfigHelper.Feature(config, FeatureCategory.Gameplay, "Health", "Unconsciousness", true,
-                "Pain, untreated bleeding and heavy injuries make you dizzy, and dizziness ends in passing out. A big burst of damage, like losing both legs or a nearby explosion, knocks you out at once. The Adrenaline injector keeps you conscious. While you're out, nearby bots may rob you and time passes.",
+                "Pain, untreated bleeding and heavy injuries make you dizzy, and dizziness ends in passing out. A big burst of damage, like losing both legs or a nearby explosion, knocks you out at once. The Adrenaline injector keeps you conscious. While you're out, time passes.",
                 Section, "Unconsciousness");
             _dizzinessRate = config.Bind(Section, "Dizziness Build Up", 1f,
                 ConfigHelper.Advanced("How fast pain, bleeding and injuries make you dizzy and pass out.", new AcceptableValueRange<float>(0.1f, 5f)));
@@ -101,6 +103,10 @@ namespace mizmii.ReClassic.Consciousness
                 ConfigHelper.Advanced("How much faster the raid runs while you're out on a short blackout, so bots keep moving around the map. Higher is quicker but heavier on performance.", new AcceptableValueRange<float>(1f, 16f)));
             _followerRadius = config.Bind(Section, "Killer Group Radius", 30f,
                 ConfigHelper.Advanced("On a long blackout, bots this many meters from whoever knocked you out leave with them.", new AcceptableValueRange<float>(0f, 150f)));
+            _robbing = ConfigHelper.Feature(config, FeatureCategory.Gameplay, "Health", "Unconscious Robbery", false,
+                "Nearby bots search you while you're out and may take your weapons, plates and loot, or leave gear on the ground next to you. Off by default, it can still cause weapon and hand issues after waking up.",
+                Section, "Robbery");
+            ConfigHelper.Experimental(_robbing);
             _dropChance = config.Bind(Section, "Gear Dropped Chance", 0.35f,
                 ConfigHelper.Advanced("Chance that bots searching you leave some of your gear lying on the ground next to you.", new AcceptableValueRange<float>(0f, 1f)));
             _despawnRadius = config.Bind(Section, "Robbery Radius", 60f,
@@ -126,6 +132,8 @@ namespace mizmii.ReClassic.Consciousness
                 ConfigHelper.Advanced("In Fika, when everyone is down, the most seconds after the first player wakes before each other player wakes on their own.", new AcceptableValueRange<float>(0f, 900f)));
             _handWakeTime = config.Bind(Section, "Wake By Hand Time", 5f,
                 ConfigHelper.Advanced("In Fika, seconds it takes to wake a teammate by hand.", new AcceptableValueRange<float>(1f, 30f)));
+            ConfigHelper.Requires(_enabled, _robbing, _dizzinessRate, _burstDamage, _explosionDamage, _minDuration, _maxDuration, _minSkipMinutes, _maxSkipMinutes, _longBlackoutMinutes, _simulationSpeed, _followerRadius, _cooldown, _coopMinMinutes, _coopMaxMinutes, _staggerMin, _staggerMax, _handWakeTime);
+            ConfigHelper.Requires(_robbing, _dropChance, _despawnRadius);
 
             Robbery.Enable();
             new RaidStartPatch().Enable();

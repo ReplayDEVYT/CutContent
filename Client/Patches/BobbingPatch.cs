@@ -15,6 +15,7 @@ namespace mizmii.ReClassic.Patches
     {
         private const float AlphaRunStepMin = 0.9f;
         private const float StepMax = 1.2f;
+        private const float StopGrace = 0.25f;
 
         private static ConfigEntry<bool> _enabled;
         private static ConfigEntry<bool> _alphaHeadBob;
@@ -25,6 +26,7 @@ namespace mizmii.ReClassic.Patches
         {
             public Vector3 LastPosition;
             public bool Walking;
+            public float StillTime;
             public bool Initialized;
             public AnimValProcessor[] Normal;
         }
@@ -37,6 +39,8 @@ namespace mizmii.ReClassic.Patches
             const string section = "Combat - Weapon Handling";
             _alphaHeadBob = config.Bind(section, "Alpha Head Bob", true, "With Alpha Bobbing on, the camera bobs as hard as the alpha's while walking and running, ignoring the game's Head bobbing setting (which defaults to its lowest value). The alpha had no such setting, so its head bob always ran at full strength, and grew stronger the faster you moved.");
             _headBobStrength = config.Bind(section, "Head Bob Strength", 1f, new ConfigDescription("How strong the alpha head bob is. 1 is the alpha. The game's own Head bobbing setting goes from 0.2 to 1.", new AcceptableValueRange<float>(0.2f, 2f)));
+            ConfigHelper.Requires(_enabled, _alphaHeadBob);
+            ConfigHelper.Requires(_alphaHeadBob, _headBobStrength);
             new WalkPatch().Enable();
             new HeadBobPatch(false).Enable();
             new HeadBobPatch(true).Enable();
@@ -137,14 +141,33 @@ namespace mizmii.ReClassic.Patches
                     __instance.StepFrequency = 0.5f / Mathf.Clamp(interval, AlphaRunStepMin - speed / 2f, StepMax);
                 }
 
-                Vector3 moved = __instance.Transform.InverseTransformDirection(__instance.Transform.position - state.LastPosition);
+                Vector3 worldVelocity;
+                if (player.MovementContext != null && player.MovementContext.CharacterController != null)
+                {
+                    worldVelocity = player.MovementContext.Velocity;
+                }
+                else
+                {
+                    float dt = Mathf.Max(Time.deltaTime, 0.0001f);
+                    worldVelocity = (__instance.Transform.position - state.LastPosition) / dt;
+                }
                 state.LastPosition = __instance.Transform.position;
+                Vector3 moved = __instance.Transform.InverseTransformDirection(worldVelocity);
                 moved.z = moved.z > 0f ? moved.z : moved.z * __instance.BackSpeedMultyplyer;
                 float magnitude = new Vector2(moved.x * __instance.SideSpeedMultyplyer, moved.z).magnitude;
 
                 int preset = (int)__instance.CurrentWalkPreset;
                 AnimValProcessor[] processors = preset == (int)WalkEffector.EWalkPreset.normal && state.Normal != null ? state.Normal : __instance.PresetProcessors[preset];
-                if (magnitude > __instance.Treshold * Time.deltaTime)
+                bool moving = magnitude > __instance.Treshold;
+                if (moving)
+                {
+                    state.StillTime = 0f;
+                }
+                else
+                {
+                    state.StillTime += deltaTime;
+                }
+                if (moving)
                 {
                     state.Walking = true;
                     _inWalk = _alphaHeadBob.Value;
@@ -160,7 +183,7 @@ namespace mizmii.ReClassic.Patches
                         _inWalk = false;
                     }
                 }
-                else if (state.Walking)
+                else if (state.Walking && state.StillTime > StopGrace)
                 {
                     state.Walking = false;
                     for (int i = 0; i < processors.Length; i++)

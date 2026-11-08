@@ -157,6 +157,7 @@ namespace mizmii.ReClassic.Patches
             _mode = config.Bind(section, "Scope Glare Mode", ScopeGlareMode.Realistic, ModeDescription);
             _aimShine = config.Bind(section, "Shine While Aiming", 0.5f, new ConfigDescription("How much glass shine and glare stays on a scope's lens while you aim through it. The game normally cuts it to a tenth when aiming. Scales with Scope Glare Mode; Classic doubles it, so 0.5 already gives the alpha's full glare. 0 keeps the game's behaviour.", new AcceptableValueRange<float>(0f, 1f)));
             ConfigHelper.Option(FeatureCategory.VisualsAndAudio, "Scopes", _mode);
+            ConfigHelper.Requires(_glass, _aimShine);
 
             _glass.SettingChanged += (sender, args) => ReapplyAll();
             _reticleNoise.SettingChanged += (sender, args) => ReapplyAll();

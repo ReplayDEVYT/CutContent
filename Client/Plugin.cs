@@ -3,9 +3,10 @@ using BepInEx.Logging;
 
 namespace mizmii.ReClassic
 {
-    [BepInPlugin(Guid, "Re-Classic", "1.1.0")]
+    [BepInPlugin(Guid, "Re-Classic", "1.2.0")]
     [BepInDependency("xyz.drakia.searchopencontainers")]
     [BepInDependency("com.fika.core", BepInDependency.DependencyFlags.SoftDependency)]
+    [BepInDependency("xyz.drakia.bigbrain", BepInDependency.DependencyFlags.SoftDependency)]
     public class Plugin : BaseUnityPlugin
     {
         public const string Guid = "com.mizmii.reclassic";
@@ -88,6 +89,11 @@ namespace mizmii.ReClassic
             Start("Body Search", () => Patches.BodySearch.Enable(Config));
             Start("Item Usage Bar", () => Patches.UsingBar.Enable(Config));
             Start("Looting Animations", () => Patches.LootAnimations.Enable(Config));
+            Start("Raid Timers", () => Raid.RaidTimers.Enable(Config));
+            Start("Flashlight Beam", () => Patches.FlashlightCookie.Enable(Config));
+            Start("Grenade Quick Throw", () => Patches.QuickThrow.Enable(Config));
+            Start("Map Guides", () => Patches.MapGuides.Enable(Config));
+            Start("PMC Karma", () => Karma.PmcKarma.Enable(Config));
             Start("FeatureSettingsTab", () =>
             {
                 Patches.FeatureSettingsTab.Enable();

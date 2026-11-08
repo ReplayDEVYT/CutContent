@@ -105,6 +105,8 @@ namespace mizmii.ReClassic.Patches
             _tonemap.SettingChanged += (sender, args) => ToggleTonemap();
             _grain = config.Bind(Section, "Alpha Film Grain", false, ConfigHelper.Advanced("With Alpha Tonemap on, add the alpha camera's film grain."));
             _grade = config.Bind(Section, "Alpha Colour Grade", true, ConfigHelper.Advanced("With Alpha Tonemap on, use the alpha's colour grade filter. Amand's Graphics turns the game's colour grade off unless its 'Use BSG CC_Vintage' option is on."));
+            ConfigHelper.Requires(_lighting, _strength);
+            ConfigHelper.Requires(_tonemap, _keepAdaptation, _grain, _grade);
 
             _keepAdaptation.SettingChanged += (sender, args) => ReapplyTonemap();
             _grain.SettingChanged += (sender, args) => ReapplyTonemap();

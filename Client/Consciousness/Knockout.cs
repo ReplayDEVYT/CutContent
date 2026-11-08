@@ -36,6 +36,7 @@ namespace mizmii.ReClassic.Consciousness
         private float _savedTimeScale;
         private float _savedFixedDelta;
         private float _savedMaxDelta;
+        private float _simulationEnds;
 
         public bool Simulating => _simulating;
         private bool _finished;
@@ -93,6 +94,7 @@ namespace mizmii.ReClassic.Consciousness
             Step("play the knockout voice line", () => Player.Speaker?.Play(EPhraseTrigger.OnDeath, Player.HealthStatus, true));
             Step("hide the HUD", HideInterface);
             Step("release the trigger", ReleaseTrigger);
+            Step("stop sprinting", () => ClearSprint(Player));
             Step("block input", () => GamePlayerOwner.SetIgnoreInput(true));
             Step("go prone", () => ForceProne(Player));
             Step("close the eyes", CloseEyes);
@@ -146,7 +148,7 @@ namespace mizmii.ReClassic.Consciousness
                     float simulated = minutes * 60f / ClockFactor();
                     float speed = Mathf.Clamp(simulated / Mathf.Max(1f, Consciousness.RandomDuration()), 1f, Consciousness.SimulationSpeed);
                     duration = simulated / speed;
-                    Step("speed up the raid", () => StartSimulation(speed));
+                    Step("speed up the raid", () => StartSimulation(speed, simulated / speed));
                 }
                 float skipSeconds = duration;
                 _screen?.SetCountdown(duration + 0.6f);
@@ -205,6 +207,10 @@ namespace mizmii.ReClassic.Consciousness
 
         private void Search(List<Player> robbers, bool giveToBots)
         {
+            if (!Consciousness.Robbing)
+            {
+                return;
+            }
             _report = Robbery.Rob(Player, robbers, giveToBots);
             _report.Dropped += Robbery.DropGear(Player, _report);
             Robbery.Forget();
@@ -221,7 +227,7 @@ namespace mizmii.ReClassic.Consciousness
             return factor > 0f ? factor : 7f;
         }
 
-        private void StartSimulation(float speed)
+        private void StartSimulation(float speed, float realSeconds)
         {
             if (_simulating || speed <= 1.01f)
             {
@@ -234,6 +240,7 @@ namespace mizmii.ReClassic.Consciousness
             Time.fixedDeltaTime = Mathf.Min(_savedFixedDelta * speed, Mathf.Max(_savedFixedDelta, 0.08f));
             Time.maximumDeltaTime = Mathf.Max(_savedMaxDelta, Time.fixedDeltaTime * 4f);
             _simulating = true;
+            _simulationEnds = Time.realtimeSinceStartup + realSeconds + 5f;
             Plugin.LogSource.LogInfo($"[Unconsciousness] Running the raid at {speed:0.0}x while the player is out.");
         }
 
@@ -247,6 +254,22 @@ namespace mizmii.ReClassic.Consciousness
             Time.timeScale = _savedTimeScale;
             Time.fixedDeltaTime = _savedFixedDelta;
             Time.maximumDeltaTime = _savedMaxDelta;
+        }
+
+        private void Update()
+        {
+            if (_simulating && Time.realtimeSinceStartup > _simulationEnds)
+            {
+                Plugin.LogSource.LogWarning("[Unconsciousness] The blackout ran past its end, putting the raid back to normal speed.");
+                StopSimulation();
+                StopOwnTimeSkip();
+            }
+        }
+
+        private void OnDisable()
+        {
+            StopSimulation();
+            StopOwnTimeSkip();
         }
 
         private void StopOwnTimeSkip()
@@ -318,13 +341,33 @@ namespace mizmii.ReClassic.Consciousness
             {
                 return;
             }
-            movement.EnableSprint(false);
+            ClearSprint(player);
             if (!movement.IsInPronePose)
             {
                 player.CurrentManagedState?.Prone();
             }
             movement.SetPoseLevel(0f, true);
             movement.IsInPronePose = true;
+        }
+
+        public static void ClearSprint(Player player)
+        {
+            MovementContext movement = player?.MovementContext;
+            if (movement == null)
+            {
+                return;
+            }
+            if (player.CurrentManagedState is MovePlayerState move)
+            {
+                move._sprintPressedAndPostponed = false;
+            }
+            movement.EnableSprint(false);
+            if (player.Physical is Physical physical && physical.Consumptions.TryGetValue(Physical.EConsumptionType.Sprint, out Physical.Consumption sprint) && sprint != null)
+            {
+                sprint.SetActive(physical, false);
+                physical.StaminaConsumptionChanged();
+            }
+            movement.PlayerAnimatorEnableSprint(false);
         }
 
         private IEnumerator HoldProne()
@@ -348,6 +391,11 @@ namespace mizmii.ReClassic.Consciousness
             }
             _finished = true;
             Step("release the trigger", ReleaseTrigger);
+            Step("stop sprinting", () =>
+            {
+                ClearSprint(Player);
+                Player.MovementContext?.ResetSpeedAfterSprint();
+            });
             Step("give input back", () => GamePlayerOwner.SetIgnoreInput(false));
             Step("reset the hands", ResetHands);
             Step("hand over the weapon in your hands", () => Robbery.HandOver(Player, _report));
@@ -378,6 +426,10 @@ namespace mizmii.ReClassic.Consciousness
             Step("return the raid to normal speed", StopSimulation);
             Step("stop the time skip", StopOwnTimeSkip);
             Step("show the HUD", ShowInterface);
+            if (alive)
+            {
+                Step("stop sprinting", () => ClearSprint(Player));
+            }
             Step("give input back", () => GamePlayerOwner.SetIgnoreInput(false));
             if (Cooperative && Player != null)
             {

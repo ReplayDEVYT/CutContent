@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <RootNamespace>ReClassic</RootNamespace>
-    <Version>1.1.0</Version>
+    <Version>1.2.0</Version>
     <Authors>mizmii</Authors>
     <Company>mizmii</Company>
     <Product>Re-Classic</Product>
@@ -20,6 +20,13 @@
     <PackageReference Include="SPTushonka.Common" Version="4.1.6" />
     <PackageReference Include="SPTushonka.DI" Version="4.1.6" />
     <PackageReference Include="SPTushonka.Server.Core" Version="4.1.6" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="0Harmony">
+      <HintPath>C:\spt41\SPT_Runtime\0Harmony.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
   </ItemGroup>
 
   <ItemGroup>
@@ -50,7 +57,6 @@
 
     <MakeDir Directories="$(TempPackageDir)\BepInEx\plugins" />
     <Copy SourceFiles="$(ProjectDir)..\Client\bin\$(Configuration)\netstandard2.1\$(AssemblyName).dll" DestinationFolder="$(TempPackageDir)\BepInEx\plugins" />
-    <Copy SourceFiles="$(ProjectDir)..\Client\bin\$(Configuration)\netstandard2.1\EFTEffectManager.dll" DestinationFolder="$(TempPackageDir)\BepInEx\plugins" />
     <ZipDirectory SourceDirectory="$(TempPackageDir)" DestinationFile="$(ProjectDir)..\$(ZipFileName)" Overwrite="true" />
 
     <RemoveDir Directories="$(TempPackageDir)" />

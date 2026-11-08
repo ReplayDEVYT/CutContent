@@ -168,7 +168,8 @@ namespace mizmii.ReClassic.Patches
                 _explosionChance = config.Bind(section, "Explosion Alarm Chance", 0.5f, new ConfigDescription("Chance that a nearby explosion sets off a car's alarm. Rolled once per car, separately from the shot roll.", new AcceptableValueRange<float>(0f, 1f)));
 
                 const string shake = "World Interactions - Car Shake";
-                _shakeEnabled = ConfigHelper.Feature(config, FeatureCategory.Environment, "Cars", "Car Shake", true, "Explosions rock nearby cars. Cars with separate wheels rock on their suspension, other cars get a smaller jolt.", shake, "Enabled");
+                _shakeEnabled = ConfigHelper.Feature(config, FeatureCategory.Environment, "Cars", "Car Shake", false, "Can cost performance. Explosions rock nearby cars. Cars with separate wheels rock on their suspension, other cars get a smaller jolt.", shake, "Enabled");
+                ConfigHelper.PerformanceHeavy(_shakeEnabled);
                 _noWheelScale = config.Bind(shake, "No-Wheel Shake Scale", 0.35f, ConfigHelper.Advanced("Shake strength for cars whose wheels are part of the body mesh, relative to cars with separate wheels. 0 turns it off.", new AcceptableValueRange<float>(0f, 1f)));
                 _landingEnabled = config.Bind(shake, "Shake On Landing", true, "Cars rock when a player lands on them.");
                 _landingScale = config.Bind(shake, "Landing Shake Scale", 0.5f, ConfigHelper.Advanced("Landing shake strength for a big drop, relative to a point blank explosion. Small hops give a fraction of this.", new AcceptableValueRange<float>(0f, 1.5f)));
@@ -176,10 +177,14 @@ namespace mizmii.ReClassic.Patches
                 _maxBounce = config.Bind(shake, "Max Bounce", 0.06f, ConfigHelper.Advanced("Largest suspension dip from a point blank explosion, in meters.", new AcceptableValueRange<float>(0f, 0.3f)));
                 _shakeDuration = config.Bind(shake, "Duration", 1.6f, ConfigHelper.Advanced("How long the car keeps rocking, in seconds.", new AcceptableValueRange<float>(0.3f, 5f)));
                 _shakeRange = config.Bind(shake, "Range Multiplier", 1.5f, ConfigHelper.Advanced("Reach of the shake and the explosion alarm roll, relative to the grenade's max explosion distance.", new AcceptableValueRange<float>(0.5f, 5f)));
-                _weightEnabled = ConfigHelper.Feature(config, FeatureCategory.Environment, "Cars", "Car Weight Tilt", true, "Cars lean on their suspension toward players standing on them. Heavier players and gear lean them more, and big trucks barely move.", shake, "Tilt Under Weight");
+                _weightEnabled = ConfigHelper.Feature(config, FeatureCategory.Environment, "Cars", "Car Weight Tilt", false, "Can cost performance. Cars lean on their suspension toward players standing on them. Heavier players and gear lean them more, and big trucks barely move.", shake, "Tilt Under Weight");
+                ConfigHelper.PerformanceHeavy(_weightEnabled);
                 _weightScale = config.Bind(shake, "Weight Tilt Scale", 1f, ConfigHelper.Advanced("Strength of the lean from standing players. 1 is roughly real car suspension.", new AcceptableValueRange<float>(0f, 4f)));
                 _weightMaxTilt = config.Bind(shake, "Max Weight Tilt", 2.5f, ConfigHelper.Advanced("Largest lean from standing players, in degrees.", new AcceptableValueRange<float>(0f, 10f)));
                 _bodyMass = config.Bind(shake, "Player Body Mass", 80f, ConfigHelper.Advanced("Body mass in kg added to each player's gear weight.", new AcceptableValueRange<float>(0f, 150f)));
+                ConfigHelper.Requires(_shakeEnabled, _weightEnabled, _noWheelScale, _landingEnabled, _maxTilt, _maxBounce, _shakeDuration);
+                ConfigHelper.Requires(_landingEnabled, _landingScale);
+                ConfigHelper.Requires(_weightEnabled, _weightScale, _weightMaxTilt, _bodyMass);
 
                 var driver = new GameObject("ReClassic_CarWeight");
                 UnityEngine.Object.DontDestroyOnLoad(driver);
@@ -193,9 +198,22 @@ namespace mizmii.ReClassic.Patches
                 private readonly Dictionary<CarAlarm, float> _masses = new Dictionary<CarAlarm, float>();
                 private readonly HashSet<CarAlarm> _loaded = new HashSet<CarAlarm>();
                 private readonly List<CarAlarm> _released = new List<CarAlarm>();
+                private readonly Dictionary<Player, float> _weights = new Dictionary<Player, float>();
+                private float _nextCheck;
+                private float _nextWeigh;
 
                 private void Update()
                 {
+                    if (Time.time < _nextCheck)
+                    {
+                        return;
+                    }
+                    _nextCheck = Time.time + 0.1f;
+                    if (Time.time >= _nextWeigh)
+                    {
+                        _nextWeigh = Time.time + 2f;
+                        _weights.Clear();
+                    }
                     _moments.Clear();
                     _masses.Clear();
                     if (_shakeEnabled.Value && _weightEnabled.Value && _weightScale.Value > 0f && Singleton<GameWorld>.Instantiated)
@@ -234,7 +252,7 @@ namespace mizmii.ReClassic.Patches
                     for (int i = 0; i < players.Count; i++)
                     {
                         Player player = players[i];
-                        if (player == null || !player.HealthController.IsAlive || player.MovementContext == null || !player.MovementContext.IsGrounded)
+                        if (player == null || player.IsAI || !player.HealthController.IsAlive || player.MovementContext == null || !player.MovementContext.IsGrounded)
                         {
                             continue;
                         }
@@ -251,7 +269,12 @@ namespace mizmii.ReClassic.Patches
                             continue;
                         }
 
-                        float mass = _bodyMass.Value + GearWeight(player);
+                        if (!_weights.TryGetValue(player, out float gear))
+                        {
+                            gear = GearWeight(player);
+                            _weights[player] = gear;
+                        }
+                        float mass = _bodyMass.Value + gear;
                         Vector3 point = player.Position;
                         _masses.TryGetValue(car, out float total);
                         _moments.TryGetValue(car, out Vector3 moment);

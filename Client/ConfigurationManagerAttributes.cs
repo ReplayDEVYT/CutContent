@@ -35,21 +35,123 @@ namespace mizmii.ReClassic
 
         public static readonly List<SettingInfo> Settings = new List<SettingInfo>();
 
-        private static readonly HashSet<ConfigEntryBase> ExperimentalEntries = new HashSet<ConfigEntryBase>();
+        private static readonly Dictionary<ConfigEntryBase, string> Marks = new Dictionary<ConfigEntryBase, string>();
 
         public static void Experimental(ConfigEntryBase entry)
         {
-            ExperimentalEntries.Add(entry);
+            Mark(entry, "EXPERIMENTAL");
+        }
+
+        public static void PerformanceHeavy(ConfigEntryBase entry)
+        {
+            Mark(entry, "PERFORMANCE HEAVY");
+        }
+
+        private static void Mark(ConfigEntryBase entry, string mark)
+        {
+            Marks[entry] = Marks.TryGetValue(entry, out string existing) ? existing + ", " + mark : mark;
             if (entry.Description.Tags.Length > 0 && entry.Description.Tags[0] is ConfigurationManagerAttributes attributes)
             {
-                attributes.DispName = entry.Definition.Key + " (EXPERIMENTAL)";
+                attributes.DispName = entry.Definition.Key + " (" + Marks[entry] + ")";
             }
+        }
+
+        private static readonly Dictionary<ConfigEntryBase, List<ConfigEntry<bool>>> Required = new Dictionary<ConfigEntryBase, List<ConfigEntry<bool>>>();
+
+        public static void Requires(ConfigEntry<bool> parent, params ConfigEntryBase[] entries)
+        {
+            foreach (ConfigEntryBase entry in entries)
+            {
+                if (entry == null || parent == null || entry == parent)
+                {
+                    continue;
+                }
+                if (!Required.TryGetValue(entry, out List<ConfigEntry<bool>> parents))
+                {
+                    parents = new List<ConfigEntry<bool>>();
+                    Required[entry] = parents;
+                }
+                if (!parents.Contains(parent))
+                {
+                    parents.Add(parent);
+                }
+            }
+        }
+
+        public static ConfigEntry<bool> MissingRequirement(ConfigEntryBase entry)
+        {
+            return Missing(entry, new HashSet<ConfigEntryBase>());
+        }
+
+        private static ConfigEntry<bool> Missing(ConfigEntryBase entry, HashSet<ConfigEntryBase> seen)
+        {
+            if (!seen.Add(entry))
+            {
+                return null;
+            }
+            foreach (ConfigEntry<bool> parent in Parents(entry))
+            {
+                ConfigEntry<bool> deeper = Missing(parent, seen);
+                if (deeper != null)
+                {
+                    return deeper;
+                }
+                if (!parent.Value)
+                {
+                    return parent;
+                }
+            }
+            return null;
+        }
+
+        private static IEnumerable<ConfigEntry<bool>> Parents(ConfigEntryBase entry)
+        {
+            if (Required.TryGetValue(entry, out List<ConfigEntry<bool>> parents))
+            {
+                return parents;
+            }
+            ConfigEntry<bool> owner = OwnerFeature(entry);
+            return owner != null ? new[] { owner } : new ConfigEntry<bool>[0];
+        }
+
+        private static ConfigEntry<bool> OwnerFeature(ConfigEntryBase entry)
+        {
+            string section = entry.Definition.Section;
+            if (section == MainSection)
+            {
+                return null;
+            }
+            string best = null;
+            ConfigEntry<bool> owner = null;
+            bool shared = false;
+            foreach (SettingInfo setting in Settings)
+            {
+                if (!(setting.Entry is ConfigEntry<bool> feature) || setting.Entry.Definition.Section != MainSection || string.IsNullOrEmpty(setting.Section))
+                {
+                    continue;
+                }
+                if (section != setting.Section && !section.StartsWith(setting.Section + " - ", System.StringComparison.Ordinal))
+                {
+                    continue;
+                }
+                if (best == null || setting.Section.Length > best.Length)
+                {
+                    best = setting.Section;
+                    owner = feature;
+                    shared = false;
+                }
+                else if (setting.Section == best && feature != owner)
+                {
+                    shared = true;
+                }
+            }
+            return shared ? null : owner;
         }
 
         public static string Label(ConfigEntryBase entry, bool upper)
         {
             string key = upper ? entry.Definition.Key.ToUpperInvariant() : entry.Definition.Key;
-            return ExperimentalEntries.Contains(entry) ? "<color=#ff8c8c>" + key + " (EXPERIMENTAL)</color>" : key;
+            return Marks.TryGetValue(entry, out string mark) ? "<color=#ff8c8c>" + key + " (" + mark + ")</color>" : key;
         }
 
         private static readonly PropertyInfo OrphanedEntries = AccessTools.Property(typeof(ConfigFile), "OrphanedEntries");

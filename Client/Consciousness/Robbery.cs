@@ -77,6 +77,10 @@ namespace mizmii.ReClassic.Consciousness
 
         public static List<Player> Robbers(Vector3 origin)
         {
+            if (!Consciousness.Robbing)
+            {
+                return new List<Player>();
+            }
             float radius = Consciousness.RobberyRadius;
             return LocalBots().Where(b => (b.Position - origin).sqrMagnitude <= radius * radius).OrderBy(b => (b.Position - origin).sqrMagnitude).ToList();
         }

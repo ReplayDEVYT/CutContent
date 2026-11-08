@@ -2,6 +2,7 @@ using BepInEx.Configuration;
 using Comfort.Common;
 using EFT;
 using EFT.Interactive;
+using mizmii.ReClassic.Consciousness;
 using HarmonyLib;
 using SPT.Reflection.Patching;
 using System;
@@ -19,7 +20,10 @@ namespace mizmii.ReClassic.Patches
         private const float MaxScanAngle = 170f;
         private const float ScanStep = 2f;
         private const float RestSpeed = 4f;
-        private const float LatchSpeed = 40f;
+        private const float CloseSnap = 4f;
+        private const float MinLeverShare = 0.3f;
+        private const float HingeDeadShare = 0.08f;
+        private const float BotNoticeRange = 15f;
 
         private static ConfigEntry<bool> _swing;
         private static ConfigEntry<bool> _blast;
@@ -71,6 +75,9 @@ namespace mizmii.ReClassic.Patches
             _blastStrength = config.Bind(section, "Blast Strength", 1f, ConfigHelper.Advanced("Scales how hard explosions push doors.", new AcceptableValueRange<float>(0.1f, 3f)));
             _swingStrength = config.Bind(section, "Swing Strength", 1f, ConfigHelper.Advanced("Scales how hard doors keep swinging after being opened or kicked.", new AcceptableValueRange<float>(0.1f, 3f)));
             _breachDistance = config.Bind(section, "Breach Distance", 1f, ConfigHelper.Advanced("How close (metres) a grenade has to explode to a closed door to breach it.", new AcceptableValueRange<float>(0.3f, 3f)));
+            ConfigHelper.Requires(_blast, _breach, _blastStrength);
+            ConfigHelper.Requires(_breach, _breachLocked, _offHingesChance, _breachDistance);
+            ConfigHelper.Requires(_swing, _swingStrength);
 
             WorldInteractions.Explosion += OnExplosion;
             new DoorStatePatch().Enable();
@@ -373,27 +380,28 @@ namespace mizmii.ReClassic.Patches
                     omega = -omega * 0.3f;
                 }
             }
-            else if (s <= 0f)
+            else if (s <= 0f || (omega < 0f && s < CloseSnap))
             {
-                s = 0f;
-                if (omega < 0f)
-                {
-                    if (-omega < LatchSpeed)
-                    {
-                        hinge.S = 0f;
-                        hinge.Omega = 0f;
-                        Latch(door);
-                        return false;
-                    }
-                    door.PlayShut();
-                    omega = -omega * 0.2f;
-                }
+                hinge.S = 0f;
+                hinge.Omega = 0f;
+                Latch(door);
+                return false;
             }
 
             hinge.S = s;
             hinge.Omega = omega;
             door.CurrentAngle = AngleOf(hinge, s);
-            return Mathf.Abs(omega) >= RestSpeed;
+            if (Mathf.Abs(omega) >= RestSpeed)
+            {
+                return true;
+            }
+            if (s < CloseSnap)
+            {
+                hinge.S = 0f;
+                hinge.Omega = 0f;
+                Latch(door);
+            }
+            return false;
         }
 
         private static void Latch(Door door)
@@ -408,6 +416,60 @@ namespace mizmii.ReClassic.Patches
             finally
             {
                 _internal = false;
+            }
+            try
+            {
+                BotsNoticeClosed(door);
+            }
+            catch (Exception e)
+            {
+                Plugin.LogSource.LogWarning($"[Doors] Could not tell bots that door {door.Id} closed: {e.Message}");
+            }
+        }
+
+        private static void BotsNoticeClosed(Door door)
+        {
+            GameWorld world = Singleton<GameWorld>.Instance;
+            if (world == null || !Coop.IsServer)
+            {
+                return;
+            }
+            Vector3 position = door.transform.position;
+            foreach (Player bot in world.AllAlivePlayersList)
+            {
+                if (bot == null || !bot.IsAI || (bot.Position - position).sqrMagnitude > BotNoticeRange * BotNoticeRange)
+                {
+                    continue;
+                }
+                BotOwner owner = bot.AIData?.BotOwner;
+                BotDoorOpener opener = owner?.DoorOpener;
+                if (opener == null)
+                {
+                    continue;
+                }
+                NavMeshDoorLink link = opener._currentDoorLink;
+                bool current = link != null && link.Door == door;
+                bool opened = opener._lastInteractingDoor == door;
+                if (!current && !opened)
+                {
+                    continue;
+                }
+                if (opened)
+                {
+                    opener._lastInteractingDoor = null;
+                }
+                if (current)
+                {
+                    link.LastInteractByBotTime = 0f;
+                }
+                opener._searchCloseDoorTime = 0f;
+                opener._nextWantPassCheck = 0f;
+                opener._breachRolledForCurrentDoor = false;
+                if (opener._enteringDoorSequence)
+                {
+                    opener._enteringDoorSequence = false;
+                    owner.Mover.SetMoverState(EBotMoverState.Default);
+                }
             }
         }
 
@@ -780,9 +842,9 @@ namespace mizmii.ReClassic.Patches
             {
                 return;
             }
-            foreach (Player player in PlayerKind.Humans())
+            foreach (Player player in Pushers())
             {
-                if (player == null || !player.HealthController.IsAlive)
+                if (player == null || player.HealthController == null || !player.HealthController.IsAlive)
                 {
                     continue;
                 }
@@ -791,6 +853,11 @@ namespace mizmii.ReClassic.Patches
                 Vector3 velocity = LastPositions.TryGetValue(id, out Vector3 last) ? (position - last) / dt : Vector3.zero;
                 LastPositions[id] = position;
                 velocity.y = 0f;
+                Vector3 intended = Intended(player);
+                if (intended.sqrMagnitude > velocity.sqrMagnitude)
+                {
+                    velocity = intended;
+                }
                 if (velocity.sqrMagnitude < 0.04f || velocity.sqrMagnitude > 100f)
                 {
                     continue;
@@ -808,6 +875,49 @@ namespace mizmii.ReClassic.Patches
                     PushByPlayer(door, position, velocity, dt);
                 }
             }
+        }
+
+        private static IEnumerable<Player> Pushers()
+        {
+            foreach (Player human in PlayerKind.Humans())
+            {
+                yield return human;
+            }
+            if (!Coop.IsServer || _doorsWorld == null)
+            {
+                yield break;
+            }
+            List<Player> all = _doorsWorld.AllAlivePlayersList;
+            for (int i = 0; i < all.Count; i++)
+            {
+                Player bot = all[i];
+                if (bot != null && bot.IsAI)
+                {
+                    yield return bot;
+                }
+            }
+        }
+
+        private static Vector3 Intended(Player player)
+        {
+            if (!player.IsYourPlayer && !(player.IsAI && Coop.IsServer))
+            {
+                return Vector3.zero;
+            }
+            MovementContext context = player.MovementContext;
+            Vector2 input = player.InputDirection;
+            if (context == null || input.sqrMagnitude < 0.01f)
+            {
+                return Vector3.zero;
+            }
+            Vector3 direction = context.PlayerTransform.TransformVector(new Vector3(input.x, 0f, input.y));
+            direction.y = 0f;
+            if (direction.sqrMagnitude < 0.0001f)
+            {
+                return Vector3.zero;
+            }
+            float speed = context.IsSprintEnabled ? 6f : Mathf.Max(context.ClampedSpeed * 4f, 0.8f);
+            return direction.normalized * speed;
         }
 
         private static void PushByPlayer(Door door, Vector3 feet, Vector3 velocity, float dt)
@@ -855,14 +965,21 @@ namespace mizmii.ReClassic.Patches
             Vector3 axis = Axis(door);
             Vector3 contact = point - normal * (Mathf.Abs(offset) * thinScale);
             Vector3 lever = Vector3.ProjectOnPlane(contact - t.position, axis);
-            float leverLength = Mathf.Max(lever.magnitude, 0.25f);
+            float doorWidth = Mathf.Max(box.size[hinge.Wide] * wideScale, 0.3f);
+            float share = lever.magnitude / doorWidth;
+            float weight = Mathf.InverseLerp(HingeDeadShare, MinLeverShare, share);
+            if (weight <= 0f || lever.sqrMagnitude < 0.0001f)
+            {
+                return;
+            }
+            float leverLength = Mathf.Max(lever.magnitude, doorWidth * MinLeverShare, 0.25f);
             float tangent = Vector3.Dot(Vector3.Cross(axis, lever.normalized), -normal);
             if (Mathf.Abs(tangent) < 0.2f)
             {
                 return;
             }
             float worldDepth = depth * thinScale;
-            float degrees = Mathf.Min(worldDepth, approach * dt * 1.3f) / leverLength * Mathf.Rad2Deg;
+            float degrees = Mathf.Min(worldDepth, approach * dt * 1.3f) / leverLength * Mathf.Rad2Deg * weight;
             float delta = Mathf.Sign(tangent) * degrees * hinge.Direction;
             float s = Mathf.Clamp(SOf(hinge, door.CurrentAngle), 0f, hinge.MaxS);
             float next = Mathf.Clamp(s + delta, 0f, hinge.MaxS);
@@ -873,7 +990,7 @@ namespace mizmii.ReClassic.Patches
             float omega = (next - s) / dt;
             hinge.S = next;
             door.CurrentAngle = AngleOf(hinge, next);
-            if (next <= 0.5f && delta < 0f)
+            if (next <= CloseSnap * 0.5f && delta < 0f)
             {
                 hinge.Omega = 0f;
                 hinge.Active = false;

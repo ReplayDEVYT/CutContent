@@ -147,6 +147,7 @@ public class AuctionService(
         lock (_lock)
         {
             long now = timeUtil.GetTimeStamp();
+            RemoveBroken();
             foreach (AuctionLot lot in _state.Lots.ToList())
             {
                 RunAiBidders(lot, now);
@@ -160,6 +161,51 @@ public class AuctionService(
             FillAiLots(now);
             DeliverPending();
             Save();
+        }
+    }
+
+    private bool Broken(AuctionLot lot)
+    {
+        if (lot.Items == null || lot.Items.Count == 0)
+        {
+            return true;
+        }
+        var ids = new HashSet<string>();
+        foreach (Item item in lot.Items)
+        {
+            if (item == null || !itemHelper.GetItem(item.Template).Key)
+            {
+                return true;
+            }
+            ids.Add(item.Id.ToString());
+        }
+        for (int i = 1; i < lot.Items.Count; i++)
+        {
+            if (string.IsNullOrEmpty(lot.Items[i].ParentId) || !ids.Contains(lot.Items[i].ParentId!))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void RemoveBroken()
+    {
+        foreach (AuctionLot lot in _state.Lots.ToList())
+        {
+            if (!Broken(lot))
+            {
+                continue;
+            }
+            string template = lot.Items is { Count: > 0 } && lot.Items[0] != null ? lot.Items[0].Template.ToString() : "nothing";
+            logger.Warning($"[Re-Classic] Removed auction {lot.Id} ({template}) because its item no longer exists. Was a mod removed?");
+            AuctionBid? leader = lot.Leader;
+            if (leader != null && leader.IsPlayer)
+            {
+                Send(leader.Bidder, $"An auction you were winning was cancelled because its item no longer exists. Your bid of {FormatPrice(leader.Amount, lot.Currency)} has been returned.", MoneyItems(lot.Currency, leader.Amount));
+            }
+            _state.Lots.Remove(lot);
+            _dirty = true;
         }
     }
 
@@ -205,7 +251,16 @@ public class AuctionService(
         int attempts = 0;
         while (aiLots < target && attempts++ < target * 4)
         {
-            if (CreateAiLot(pool, now, aiLots < _config.MinAiLots && _state.Lots.Count == 0))
+            bool created;
+            try
+            {
+                created = CreateAiLot(pool, now, aiLots < _config.MinAiLots && _state.Lots.Count == 0);
+            }
+            catch (Exception)
+            {
+                created = false;
+            }
+            if (created)
             {
                 aiLots++;
             }
@@ -582,7 +637,14 @@ public class AuctionService(
         double value;
         if (items.Count > 1)
         {
-            value = ragfairPriceService.GetDynamicOfferPriceForOffer(items, SPTarkov.Server.Core.Models.Enums.Money.ROUBLES, false);
+            try
+            {
+                value = ragfairPriceService.GetDynamicOfferPriceForOffer(items, SPTarkov.Server.Core.Models.Enums.Money.ROUBLES, false);
+            }
+            catch (Exception)
+            {
+                value = items.Sum(i => ragfairPriceService.GetFleaPriceForItem(i.Template) * (i.Upd?.StackObjectsCount ?? 1));
+            }
         }
         else
         {
@@ -676,7 +738,7 @@ public class AuctionService(
         lock (_lock)
         {
             string session = sessionId.ToString();
-            IEnumerable<AuctionLot> lots = _state.Lots;
+            IEnumerable<AuctionLot> lots = _state.Lots.Where(l => !Broken(l));
             switch (request.AuctionView)
             {
                 case "mine":
@@ -773,9 +835,10 @@ public class AuctionService(
         {
             string session = sessionId.ToString();
             var response = new AuctionLotsResponse { ServerTime = timeUtil.GetTimeStamp() };
+            IEnumerable<AuctionLot> valid = _state.Lots.Where(l => !Broken(l));
             IEnumerable<AuctionLot> lots = request.Ids is { Count: > 0 }
-                ? _state.Lots.Where(l => request.Ids.Contains(l.Id))
-                : _state.Lots.Where(l => l.SellerId == session || l.Bids.Any(b => b.Bidder == session));
+                ? valid.Where(l => request.Ids.Contains(l.Id))
+                : valid.Where(l => l.SellerId == session || l.Bids.Any(b => b.Bidder == session));
             foreach (AuctionLot lot in lots)
             {
                 response.Lots.Add(View(lot, session));

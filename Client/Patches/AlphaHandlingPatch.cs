@@ -131,7 +131,9 @@ namespace mizmii.ReClassic.Patches
 
         private class SwayState
         {
-            public Vector3 LastForward;
+            public Quaternion LastLook;
+            public bool HasLook;
+            public float LastTime;
             public Vector2 LastRotationVelocity;
             public readonly Vector2[] VelocitySamples = new Vector2[AverageSamples];
             public readonly Vector2[] AccelerationSamples = new Vector2[AverageSamples];
@@ -151,6 +153,7 @@ namespace mizmii.ReClassic.Patches
             _alphaWallPush = ConfigHelper.Feature(config, FeatureCategory.Combat, "Weapon Handling", "Alpha Wall Push", true, "When a weapon runs into a wall it tips up (or down when looking down) and pulls in like the alpha, instead of sliding straight back.", section, "Alpha Wall Push");
 
             _wallPushOthers = config.Bind(section, "Alpha Wall Push For Others", true, "Bots and other players (including Fika players) also tip their weapons up against walls like the alpha.");
+            ConfigHelper.Requires(_alphaWallPush, _wallPushOthers);
 
             new MotionPatch().Enable();
             new EffectorsPatch().Enable();
@@ -197,11 +200,23 @@ namespace mizmii.ReClassic.Patches
                 {
                     return true;
                 }
-                SwayState state = SwayStates.GetValue(__instance, e => new SwayState { LastForward = e.Transform.forward });
-
-                Vector3 last = __instance.Transform.InverseTransformDirection(state.LastForward);
+                Player owner = PlayerKind.Owner(animation);
+                if (owner == null)
+                {
+                    return true;
+                }
+                SwayState state = SwayStates.GetValue(__instance, e => new SwayState());
+                Vector2 rotation = owner.Rotation;
+                Quaternion look = Quaternion.Euler(rotation.y, rotation.x, 0f);
+                if (!state.HasLook || Time.time - state.LastTime > 0.1f)
+                {
+                    state.LastLook = look;
+                    state.HasLook = true;
+                }
+                Vector3 last = Quaternion.Inverse(look) * (state.LastLook * Vector3.forward);
                 Vector2 gyro = new Vector2(-Mathf.Atan2(last.x, last.z) * Mathf.Rad2Deg, Mathf.Atan2(last.z, last.y) * Mathf.Rad2Deg - 90f);
-                state.LastForward = __instance.Transform.forward;
+                state.LastLook = look;
+                state.LastTime = Time.time;
                 Vector2 velocity = gyro / deltaTime;
                 velocity.x = Mathf.Clamp(velocity.x, -RotationInputClamp, RotationInputClamp);
                 velocity.y = Mathf.Clamp(velocity.y, -RotationInputClamp, RotationInputClamp);
@@ -219,9 +234,21 @@ namespace mizmii.ReClassic.Patches
                 ValProcessor[] movement = __instance._movementProcessors;
                 if (movement != null)
                 {
-                    for (int i = 0; i < movement.Length; i++)
+                    Vector2 trackedVelocity = __instance.RotationVelocity;
+                    Vector2 trackedAcceleration = __instance.RotationAcceleration;
+                    __instance.RotationVelocity = averageVelocity;
+                    __instance.RotationAcceleration = averageAcceleration;
+                    try
                     {
-                        movement[i].Process(__instance, step);
+                        for (int i = 0; i < movement.Length; i++)
+                        {
+                            movement[i].Process(__instance, step);
+                        }
+                    }
+                    finally
+                    {
+                        __instance.RotationVelocity = trackedVelocity;
+                        __instance.RotationAcceleration = trackedAcceleration;
                     }
                 }
 

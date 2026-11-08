@@ -149,6 +149,7 @@ namespace mizmii.ReClassic.Patches
             private RectTransform _content;
             private ScrollRect _scroll;
             private readonly List<Action> _refreshers = new List<Action>();
+            private readonly List<Action> _stateRefreshers = new List<Action>();
             private readonly List<DropDownBox> _dropdowns = new List<DropDownBox>();
 
             public static CategoryWindow Create(FeatureTab tab)
@@ -319,11 +320,21 @@ namespace mizmii.ReClassic.Patches
             private void OnEnable()
             {
                 Sync.SettingsSync.LockChanged += Refresh;
+                ConfigFile config = Config();
+                if (config != null)
+                {
+                    config.SettingChanged += OnSettingChanged;
+                }
             }
 
             private void OnDisable()
             {
                 Sync.SettingsSync.LockChanged -= Refresh;
+                ConfigFile config = Config();
+                if (config != null)
+                {
+                    config.SettingChanged -= OnSettingChanged;
+                }
             }
 
             private void Refresh()
@@ -345,6 +356,7 @@ namespace mizmii.ReClassic.Patches
                 }
                 _dropdowns.Clear();
                 _refreshers.Clear();
+                _stateRefreshers.Clear();
                 foreach (Transform child in Children(_content))
                 {
                     child.gameObject.SetActive(false);
@@ -433,6 +445,17 @@ namespace mizmii.ReClassic.Patches
                     }
                 });
                 _refreshers.Add(() => toggle.UpdateValue(entry.Value, false));
+                EventHandler changed = null;
+                changed = (sender, args) =>
+                {
+                    if (toggle == null)
+                    {
+                        entry.SettingChanged -= changed;
+                        return;
+                    }
+                    toggle.UpdateValue(entry.Value, false);
+                };
+                entry.SettingChanged += changed;
                 return row;
             }
 
@@ -512,13 +535,31 @@ namespace mizmii.ReClassic.Patches
                 Action refresh = () =>
                 {
                     bool locked = synced && Sync.SettingsSync.Locked;
-                    group.interactable = !locked;
-                    group.alpha = locked ? 0.55f : 1f;
-                    string text = locked ? description + "\n\n<color=#d6b85a>" + Sync.SettingsSync.LockedNote + "</color>" : description;
+                    ConfigEntry<bool> missing = ConfigHelper.MissingRequirement(entry);
+                    group.interactable = !locked && missing == null;
+                    group.alpha = locked || missing != null ? 0.4f : 1f;
+                    string text = description;
+                    if (missing != null)
+                    {
+                        text += "\n\n<color=#9a9a9a>Requires " + missing.Definition.Key + " to be on.</color>";
+                    }
+                    if (locked)
+                    {
+                        text += "\n\n<color=#d6b85a>" + Sync.SettingsSync.LockedNote + "</color>";
+                    }
                     tooltip.SetMessageText(text.Trim(), true);
                 };
                 refresh();
                 _refreshers.Add(refresh);
+                _stateRefreshers.Add(refresh);
+            }
+
+            private void OnSettingChanged(object sender, SettingChangedEventArgs args)
+            {
+                foreach (Action refresh in _stateRefreshers)
+                {
+                    refresh();
+                }
             }
         }
 
