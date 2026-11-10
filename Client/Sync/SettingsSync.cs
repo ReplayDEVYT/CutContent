@@ -10,6 +10,7 @@ namespace mizmii.ReClassic.Sync
     internal static class SettingsSync
     {
         public const string LockedNote = "Locked to the match host's setting until the match ends.";
+        public const string NextRaidNote = "Only takes effect next raid, so it can't be changed until the match ends.";
 
         private static ConfigFile _config;
         private static Dictionary<ConfigEntryBase, string> _originals;
@@ -17,6 +18,11 @@ namespace mizmii.ReClassic.Sync
         private static bool _saveOnSet;
         private static bool _applying;
         private static float _lastNotice;
+        private static bool _dirty;
+        private static float _dirtyAt;
+
+        public static bool Hosting { get; private set; }
+        public static Action Broadcast;
 
         public static bool Locked { get; private set; }
         public static event Action LockChanged;
@@ -31,7 +37,7 @@ namespace mizmii.ReClassic.Sync
         {
             string section = entry.Definition.Section;
             string key = entry.Definition.Key;
-            if (section == "Hidden" || section.StartsWith("Prop Physics", StringComparison.Ordinal) || section.EndsWith(" - Debug", StringComparison.Ordinal))
+            if (section == "Hidden" || section == "Developer" || section.StartsWith("Prop Physics", StringComparison.Ordinal) || section.EndsWith(" - Debug", StringComparison.Ordinal))
             {
                 return false;
             }
@@ -44,6 +50,36 @@ namespace mizmii.ReClassic.Sync
                 return false;
             }
             return entry.SettingType != typeof(KeyboardShortcut);
+        }
+
+        public static bool IsLocked(ConfigEntryBase entry)
+        {
+            if (!IsSynced(entry))
+            {
+                return false;
+            }
+            return Locked || (Hosting && ConfigHelper.IsNextRaid(entry));
+        }
+
+        public static string NoteFor(ConfigEntryBase entry)
+        {
+            return Locked ? LockedNote : NextRaidNote;
+        }
+
+        public static void Tick()
+        {
+            if (_dirty && UnityEngine.Time.realtimeSinceStartup - _dirtyAt > 0.3f)
+            {
+                _dirty = false;
+                try
+                {
+                    Broadcast?.Invoke();
+                }
+                catch (Exception e)
+                {
+                    Plugin.LogSource.LogWarning($"[Fika] Could not send the new settings: {e.Message}");
+                }
+            }
         }
 
         private static string Key(ConfigEntryBase entry)
@@ -84,7 +120,21 @@ namespace mizmii.ReClassic.Sync
 
         public static void LockCurrent()
         {
-            Lock(null);
+            if (_config == null)
+            {
+                return;
+            }
+            Hosting = true;
+            LockedValues.Clear();
+            foreach (ConfigEntryBase entry in Entries())
+            {
+                if (ConfigHelper.IsNextRaid(entry))
+                {
+                    LockedValues[entry] = entry.GetSerializedValue();
+                }
+            }
+            LockChanged?.Invoke();
+            Plugin.LogSource.LogInfo("[Fika] Hosting: your Re-Classic setting changes are sent to the other players as you make them.");
         }
 
         private static void Lock(Dictionary<string, string> values)
@@ -130,6 +180,13 @@ namespace mizmii.ReClassic.Sync
 
         public static void Unlock()
         {
+            if (Hosting)
+            {
+                Hosting = false;
+                _dirty = false;
+                LockedValues.Clear();
+                LockChanged?.Invoke();
+            }
             if (!Locked || _config == null)
             {
                 return;
@@ -160,11 +217,41 @@ namespace mizmii.ReClassic.Sync
 
         private static void OnSettingChanged(object sender, SettingChangedEventArgs args)
         {
-            if (!Locked || _applying)
+            if (_applying)
             {
                 return;
             }
             ConfigEntryBase entry = args.ChangedSetting;
+            if (Hosting && !Locked)
+            {
+                if (LockedValues.TryGetValue(entry, out string fixedValue))
+                {
+                    if (entry.GetSerializedValue() != fixedValue)
+                    {
+                        _applying = true;
+                        try
+                        {
+                            entry.SetSerializedValue(fixedValue);
+                        }
+                        finally
+                        {
+                            _applying = false;
+                        }
+                        Notice(entry.Definition.Key + " only takes effect next raid, so it can't be changed until the match ends.");
+                    }
+                    return;
+                }
+                if (IsSynced(entry))
+                {
+                    _dirty = true;
+                    _dirtyAt = UnityEngine.Time.realtimeSinceStartup;
+                }
+                return;
+            }
+            if (!Locked)
+            {
+                return;
+            }
             if (!LockedValues.TryGetValue(entry, out string value) || entry.GetSerializedValue() == value)
             {
                 return;
@@ -178,10 +265,15 @@ namespace mizmii.ReClassic.Sync
             {
                 _applying = false;
             }
+            Notice("Re-Classic settings follow the match host and can't be changed until the match ends.");
+        }
+
+        private static void Notice(string text)
+        {
             if (UnityEngine.Time.realtimeSinceStartup - _lastNotice > 2f)
             {
                 _lastNotice = UnityEngine.Time.realtimeSinceStartup;
-                NotificationManager.DisplayWarningNotification("Re-Classic settings follow the match host and can't be changed until the match ends.");
+                NotificationManager.DisplayWarningNotification(text);
             }
         }
     }

@@ -143,6 +143,10 @@ namespace mizmii.ReClassic.Consciousness
                     Step("send the attackers away", () => Robbery.DespawnKillers(killer, Player.Position));
                     duration = Consciousness.RandomDuration();
                 }
+                else if (!Consciousness.SpeedUpRaid)
+                {
+                    duration = Consciousness.RandomDuration();
+                }
                 else
                 {
                     float simulated = minutes * 60f / ClockFactor();
@@ -160,6 +164,8 @@ namespace mizmii.ReClassic.Consciousness
                 yield return new WaitForSecondsRealtime(duration);
                 Step("return the raid to normal speed", StopSimulation);
                 Step("stop the time skip", StopOwnTimeSkip);
+                float passed = Mathf.Max(0f, minutes * 60f / ClockFactor() - duration);
+                Step("let the time pass for the body", () => Blackout.PassTime(Player, passed));
             }
             else
             {
@@ -573,13 +579,49 @@ namespace mizmii.ReClassic.Consciousness
             return world.AllAlivePlayersList.Where(p => p != null && p.IsAI && p.AIData?.BotOwner != null).ToList();
         }
 
+        private static readonly Dictionary<string, HashSet<BotsGroup>> WasEnemy = new Dictionary<string, HashSet<BotsGroup>>();
+        private static readonly Dictionary<string, HashSet<BotsGroup>> WasNeutral = new Dictionary<string, HashSet<BotsGroup>>();
+
+        private static HashSet<BotsGroup> SetFor(Dictionary<string, HashSet<BotsGroup>> map, string profileId)
+        {
+            if (!map.TryGetValue(profileId, out HashSet<BotsGroup> set))
+            {
+                set = new HashSet<BotsGroup>();
+                map[profileId] = set;
+            }
+            return set;
+        }
+
+        public static void BlockedEnemy(BotsGroup group, IPlayer person)
+        {
+            if (group != null && person != null)
+            {
+                SetFor(WasEnemy, person.ProfileId).Add(group);
+            }
+        }
+
         public static void HideFromBots(Player player)
         {
+            HashSet<BotsGroup> enemies = SetFor(WasEnemy, player.ProfileId);
+            HashSet<BotsGroup> neutrals = SetFor(WasNeutral, player.ProfileId);
             foreach (Player bot in AliveBots())
             {
                 try
                 {
-                    bot.AIData.BotOwner.BotsGroup?.RemoveEnemy(player, EBotEnemyCause.initial);
+                    BotsGroup group = bot.AIData.BotOwner.BotsGroup;
+                    if (group == null)
+                    {
+                        continue;
+                    }
+                    if (group.Enemies.ContainsKey(player))
+                    {
+                        enemies.Add(group);
+                    }
+                    else if (group.Neutrals.ContainsKey(player))
+                    {
+                        neutrals.Add(group);
+                    }
+                    group.RemoveEnemy(player, EBotEnemyCause.initial);
                 }
                 catch (Exception e)
                 {
@@ -630,6 +672,7 @@ namespace mizmii.ReClassic.Consciousness
             {
                 return;
             }
+            Unsubscribe(hands);
             Player.DestroyController();
             Player.SetInHands(item, result =>
             {
@@ -638,6 +681,20 @@ namespace mizmii.ReClassic.Consciousness
                     Plugin.LogSource.LogWarning($"[Unconsciousness] Could not take the {item.ShortName.Localized()} back in hand: {result.Error}");
                 }
             });
+        }
+
+        private void Unsubscribe(Player.AbstractHandsController hands)
+        {
+            if (hands is Player.FirearmController firearm)
+            {
+                Player.MovementContext.OnStateChanged -= firearm.StateChangedHandler;
+                Player.Physical.OnSprintStateChangedEvent -= firearm.SprintStateChangedEvent;
+            }
+            else if (hands is Player.UsableItemController usable)
+            {
+                Player.MovementContext.OnStateChanged -= usable.StateChangedHandler;
+                Player.Physical.OnSprintStateChangedEvent -= usable.SprintStateChangedEvent;
+            }
         }
 
         private void RestoreWeapon()
@@ -666,7 +723,12 @@ namespace mizmii.ReClassic.Consciousness
             {
                 return;
             }
+            WasEnemy.TryGetValue(player.ProfileId, out HashSet<BotsGroup> enemies);
+            WasNeutral.TryGetValue(player.ProfileId, out HashSet<BotsGroup> neutrals);
+            WasEnemy.Remove(player.ProfileId);
+            WasNeutral.Remove(player.ProfileId);
             var groups = new HashSet<BotsGroup>();
+            int restored = 0;
             foreach (Player bot in AliveBots())
             {
                 BotsGroup group = bot.AIData.BotOwner.BotsGroup;
@@ -676,11 +738,12 @@ namespace mizmii.ReClassic.Consciousness
                 }
                 try
                 {
-                    if (group.IsPlayerEnemy(player))
+                    if ((enemies != null && enemies.Contains(group)) || group.IsPlayerEnemy(player))
                     {
                         group.AddEnemy(player, EBotEnemyCause.initial);
+                        restored++;
                     }
-                    else
+                    else if (neutrals != null && neutrals.Contains(group))
                     {
                         group.AddNeutral(player);
                     }
@@ -690,6 +753,7 @@ namespace mizmii.ReClassic.Consciousness
                     Plugin.LogSource.LogWarning($"[Unconsciousness] Could not make {bot.Profile?.Nickname} notice the player again: {e.Message}");
                 }
             }
+            Plugin.LogSource.LogInfo($"[Unconsciousness] {restored} bot groups are hostile to {player.Profile?.Nickname} again.");
         }
 
     }

@@ -34,6 +34,8 @@ namespace mizmii.ReClassic.Patches
         private static bool _returnAfterFocus;
         private static ConfigEntry<bool> _enabled;
 
+        public static ConfigEntry<bool> Toggle => _enabled;
+
         public static void Enable(ConfigFile config)
         {
             _enabled = ConfigHelper.Feature(config, FeatureCategory.Gameplay, "Interaction", "Interaction Focus", true, "Opening a door or container turns your view toward it and slows you for a moment, then your view returns to where you were looking. Moving the mouse cancels the return.", "Interaction Focus", "Enabled");
@@ -164,7 +166,7 @@ namespace mizmii.ReClassic.Patches
             [PatchPostfix]
             private static void Postfix(Player __instance, WorldInteractiveObject door)
             {
-                if (_enabled.Value && door != null && __instance.IsYourPlayer)
+                if (_enabled.Value && !FullInteractions.Active && door != null && __instance.IsYourPlayer)
                 {
                     Begin(__instance, door);
                 }

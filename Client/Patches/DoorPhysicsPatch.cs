@@ -809,27 +809,41 @@ namespace mizmii.ReClassic.Patches
         private const float PushRadius = 0.42f;
         private const float PushRange = 2.6f;
         private static readonly List<Door> AllDoors = new List<Door>();
+        private const float CellSize = 4f;
+        private static readonly Dictionary<long, List<Door>> DoorGrid = new Dictionary<long, List<Door>>();
+
+        private static long Cell(int x, int z)
+        {
+            return ((long)x << 32) ^ (uint)z;
+        }
         private static GameWorld _doorsWorld;
-        private static float _nextDoorScan;
         private static readonly Dictionary<int, Vector3> LastPositions = new Dictionary<int, Vector3>();
 
         private static void RefreshDoors()
         {
             GameWorld world = Singleton<GameWorld>.Instance;
-            if (world != _doorsWorld || (world != null && Time.time > _nextDoorScan))
+            if (world != _doorsWorld)
             {
                 _doorsWorld = world;
-                _nextDoorScan = Time.time + 30f;
                 AllDoors.Clear();
+                DoorGrid.Clear();
                 LastPositions.Clear();
                 if (world != null)
                 {
                     foreach (Door door in Object.FindObjectsOfType<Door>())
                     {
-                        if (door.GetType() == typeof(Door))
+                        if (door.GetType() != typeof(Door))
                         {
-                            AllDoors.Add(door);
+                            continue;
                         }
+                        AllDoors.Add(door);
+                        Vector3 p = door.transform.position;
+                        long key = Cell(Mathf.FloorToInt(p.x / CellSize), Mathf.FloorToInt(p.z / CellSize));
+                        if (!DoorGrid.TryGetValue(key, out List<Door> list))
+                        {
+                            DoorGrid[key] = list = new List<Door>();
+                        }
+                        list.Add(door);
                     }
                 }
             }
@@ -862,17 +876,30 @@ namespace mizmii.ReClassic.Patches
                 {
                     continue;
                 }
-                foreach (Door door in AllDoors)
+                int cx = Mathf.FloorToInt(position.x / CellSize);
+                int cz = Mathf.FloorToInt(position.z / CellSize);
+                for (int x = cx - 1; x <= cx + 1; x++)
                 {
-                    if (door == null || door.DoorState != EDoorState.Open || !door.isActiveAndEnabled || !door.Operatable)
+                    for (int z = cz - 1; z <= cz + 1; z++)
                     {
-                        continue;
+                        if (!DoorGrid.TryGetValue(Cell(x, z), out List<Door> doors))
+                        {
+                            continue;
+                        }
+                        for (int i = 0; i < doors.Count; i++)
+                        {
+                            Door door = doors[i];
+                            if (door == null || door.DoorState != EDoorState.Open || !door.isActiveAndEnabled || !door.Operatable)
+                            {
+                                continue;
+                            }
+                            if ((door.transform.position - position).sqrMagnitude > PushRange * PushRange)
+                            {
+                                continue;
+                            }
+                            PushByPlayer(door, position, velocity, dt);
+                        }
                     }
-                    if ((door.transform.position - position).sqrMagnitude > PushRange * PushRange)
-                    {
-                        continue;
-                    }
-                    PushByPlayer(door, position, velocity, dt);
                 }
             }
         }

@@ -42,6 +42,8 @@ namespace mizmii.ReClassic.Consciousness
         public static float RobberyRadius => _despawnRadius.Value;
         public static float LongBlackoutMinutes => _longBlackoutMinutes.Value;
         public static float SimulationSpeed => _simulationSpeed.Value;
+        public static bool SpeedUpRaid => _speedUpRaid.Value;
+        private static ConfigEntry<bool> _speedUpRaid;
         public static float FollowerRadius => _followerRadius.Value;
         public static float DropChance => _dropChance.Value;
         public static bool Robbing => _robbing.Value;
@@ -99,6 +101,8 @@ namespace mizmii.ReClassic.Consciousness
                 ConfigHelper.Advanced("Most in-game minutes that pass while you're out.", new AcceptableValueRange<float>(0f, 180f)));
             _longBlackoutMinutes = config.Bind(Section, "Long Blackout Minutes", 30f,
                 ConfigHelper.Advanced("If you're out for more in-game minutes than this, whoever knocked you out and the bots with them are gone when you wake up. Shorter blackouts let the raid play out around you.", new AcceptableValueRange<float>(0f, 180f)));
+            _speedUpRaid = config.Bind(Section, "Speed Up Raid While Out", false,
+                ConfigHelper.Advanced("Run the whole raid faster while you're out on a short blackout, so bots keep moving around the map. Bots can come out of it moving too fast or confused, so it's off by default."));
             _simulationSpeed = config.Bind(Section, "Blackout Simulation Speed", 8f,
                 ConfigHelper.Advanced("How much faster the raid runs while you're out on a short blackout, so bots keep moving around the map. Higher is quicker but heavier on performance.", new AcceptableValueRange<float>(1f, 16f)));
             _followerRadius = config.Bind(Section, "Killer Group Radius", 30f,
@@ -132,7 +136,8 @@ namespace mizmii.ReClassic.Consciousness
                 ConfigHelper.Advanced("In Fika, when everyone is down, the most seconds after the first player wakes before each other player wakes on their own.", new AcceptableValueRange<float>(0f, 900f)));
             _handWakeTime = config.Bind(Section, "Wake By Hand Time", 5f,
                 ConfigHelper.Advanced("In Fika, seconds it takes to wake a teammate by hand.", new AcceptableValueRange<float>(1f, 30f)));
-            ConfigHelper.Requires(_enabled, _robbing, _dizzinessRate, _burstDamage, _explosionDamage, _minDuration, _maxDuration, _minSkipMinutes, _maxSkipMinutes, _longBlackoutMinutes, _simulationSpeed, _followerRadius, _cooldown, _coopMinMinutes, _coopMaxMinutes, _staggerMin, _staggerMax, _handWakeTime);
+            ConfigHelper.Requires(_enabled, _robbing, _dizzinessRate, _burstDamage, _explosionDamage, _minDuration, _maxDuration, _minSkipMinutes, _maxSkipMinutes, _longBlackoutMinutes, _speedUpRaid, _simulationSpeed, _followerRadius, _cooldown, _coopMinMinutes, _coopMaxMinutes, _staggerMin, _staggerMax, _handWakeTime);
+            ConfigHelper.Requires(_speedUpRaid, _simulationSpeed);
             ConfigHelper.Requires(_robbing, _dropChance, _despawnRadius);
 
             Robbery.Enable();
@@ -253,7 +258,7 @@ namespace mizmii.ReClassic.Consciousness
             }
 
             [PatchPrefix]
-            private static bool Prefix(IPlayer person, ref bool __result)
+            private static bool Prefix(BotsGroup __instance, IPlayer person, ref bool __result)
             {
                 if (person == null)
                 {
@@ -265,6 +270,7 @@ namespace mizmii.ReClassic.Consciousness
                 {
                     return true;
                 }
+                Knockout.BlockedEnemy(__instance, person);
                 __result = false;
                 return false;
             }
@@ -293,8 +299,8 @@ namespace mizmii.ReClassic.Consciousness
 
     internal sealed class ConsciousnessController : MonoBehaviour
     {
-        private const float DizzyAt = 40f;
-        private const float ClearAt = 25f;
+        private const float DizzyAt = 55f;
+        private const float ClearAt = 35f;
         private const float OutAt = 100f;
         private const float BurstWindow = 2f;
 
@@ -316,6 +322,20 @@ namespace mizmii.ReClassic.Consciousness
         private float _nextTick;
 
         public float Meter => _meter;
+
+        public static readonly Dictionary<string, float> ExternalStrains = new Dictionary<string, float>();
+
+        public static void SetStrain(string source, float value)
+        {
+            if (value <= 0f)
+            {
+                ExternalStrains.Remove(source);
+            }
+            else
+            {
+                ExternalStrains[source] = value;
+            }
+        }
 
         private void Awake()
         {
@@ -378,7 +398,10 @@ namespace mizmii.ReClassic.Consciousness
             {
                 return;
             }
-            _meter += hit.Damage * 0.35f * Consciousness.DizzinessRate;
+            if (!EffectsManager.HasPainKiller(_player.HealthController))
+            {
+                _meter += hit.Damage * 0.15f * Consciousness.DizzinessRate * (1f - Skills.SkillEffects.Value(Skills.SkillEffects.Dizziness));
+            }
             _hits.RemoveAll(h => Time.time - h.Time > BurstWindow);
             float total = _hits.Sum(h => h.Damage);
             float blast = _hits.Where(h => h.Explosive).Sum(h => h.Damage);
@@ -462,15 +485,9 @@ namespace mizmii.ReClassic.Consciousness
                 return;
             }
 
-            float gain = Strain(health) * Consciousness.DizzinessRate;
-            if (gain <= 0.01f)
-            {
-                _meter = Mathf.Max(0f, _meter - 2f * delta);
-            }
-            else
-            {
-                _meter += gain * delta;
-            }
+            float gain = Strain(health) * Consciousness.DizzinessRate * (1f - Skills.SkillEffects.Value(Skills.SkillEffects.Dizziness));
+            float recovery = gain <= 0.01f ? 2.5f : 1f;
+            _meter = Mathf.Max(0f, _meter + (gain - recovery) * delta);
 
             bool dizzy = IsDizzy();
             if (!dizzy && _meter >= DizzyAt)
@@ -493,6 +510,10 @@ namespace mizmii.ReClassic.Consciousness
         {
             bool painkiller = EffectsManager.HasPainKiller(health);
             float gain = 0f;
+            foreach (float strain in ExternalStrains.Values)
+            {
+                gain += strain;
+            }
             foreach (IHealthEffect effect in health.GetAllEffects())
             {
                 if (effect is IHeavyBleeding)
@@ -501,25 +522,25 @@ namespace mizmii.ReClassic.Consciousness
                 }
                 else if (effect is ILightBleeding)
                 {
-                    gain += 0.5f;
+                    gain += 0.4f;
                 }
                 else if (effect is IShock)
                 {
-                    gain += 9f;
+                    gain += painkiller ? 3f : 9f;
                 }
-                else if (effect is IAgony)
+                else if (!painkiller && effect is IAgony)
                 {
-                    gain += 0.6f;
+                    gain += 0.8f;
                 }
                 else if (!painkiller && (effect is IPain || effect is IFracture))
                 {
-                    gain += 0.35f;
+                    gain += 0.3f;
                 }
             }
             float whole = EffectsManager.GetHealthFraction(health);
-            if (whole < 0.4f)
+            if (whole < 0.3f)
             {
-                gain += (0.4f - whole) * 12f;
+                gain += (0.3f - whole) * 15f;
             }
             return gain;
         }

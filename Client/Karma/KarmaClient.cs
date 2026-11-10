@@ -45,6 +45,11 @@ namespace mizmii.ReClassic.Karma
 
         public static KarmaInfo Info => _info;
 
+        public static void Override(KarmaInfo info)
+        {
+            _info = info;
+        }
+
         public static bool Available => _info != null && _info.Enabled && PmcKarma.Enabled;
 
         public static double FenceSell => Available ? _info.FenceSell : 1;

@@ -13,19 +13,24 @@ namespace mizmii.ReClassic
 
         public static ManualLogSource LogSource;
 
+        public static Plugin Instance;
+
         private void Awake()
         {
             LogSource = Logger;
+            Instance = this;
             LogSource.LogInfo("Re-Classic loaded!");
             MigrateOldConfig();
             Sync.SettingsSync.Init(Config);
 
             Start("Effects", () => Effects.CustomEffects.Enable());
+            Start("Skill Effects", () => Skills.SkillEffects.Enable());
             Start("Unconsciousness", () => Consciousness.Consciousness.Enable(Config));
             Start("Interaction Focus", () =>
             {
                 Patches.InteractionFocus.Enable(Config);
             });
+            Start("Full Interactions", () => Patches.FullInteractions.Enable(Config));
             Start("Open Containers", () =>
             {
                 Patches.NoContainerInventoryPatch.Bind(Config);
@@ -90,6 +95,14 @@ namespace mizmii.ReClassic
             Start("Item Usage Bar", () => Patches.UsingBar.Enable(Config));
             Start("Looting Animations", () => Patches.LootAnimations.Enable(Config));
             Start("Raid Timers", () => Raid.RaidTimers.Enable(Config));
+            Start("Plate Hitboxes", () => Patches.PlateHitboxes.Enable(Config));
+            Start("Toxicity", () => Radiation.Toxicity.Enable(Config));
+            Start("Radiation", () => Radiation.RadiationZones.Enable(Config));
+            Start("Body Temperature", () => Temperature.BodyTemperature.Enable(Config));
+            Start("Blood Pressure", () => Pressure.BloodPressure.Enable(Config));
+            Start("Stress", () => Stress.Stress.Enable(Config));
+            Start("Overdose", () => Overdose.Overdose.Enable(Config));
+            Start("Developer Tools", () => Dev.DevTools.Enable(Config));
             Start("Flashlight Beam", () => Patches.FlashlightCookie.Enable(Config));
             Start("Grenade Quick Throw", () => Patches.QuickThrow.Enable(Config));
             Start("Map Guides", () => Patches.MapGuides.Enable(Config));
@@ -106,6 +119,11 @@ namespace mizmii.ReClassic
             {
                 Patches.WelcomePopup.Enable(Config);
             });
+        }
+
+        private void Update()
+        {
+            Sync.SettingsSync.Tick();
         }
 
         private static void Start(string feature, System.Action enable)

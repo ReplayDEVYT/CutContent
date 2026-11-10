@@ -42,6 +42,33 @@ namespace mizmii.ReClassic
             Mark(entry, "EXPERIMENTAL");
         }
 
+        private static readonly HashSet<ConfigEntryBase> NextRaidOnly = new HashSet<ConfigEntryBase>();
+
+        public static void NextRaid(params ConfigEntryBase[] entries)
+        {
+            foreach (ConfigEntryBase entry in entries)
+            {
+                if (entry != null)
+                {
+                    NextRaidOnly.Add(entry);
+                }
+            }
+        }
+
+        public static bool IsNextRaid(ConfigEntryBase entry)
+        {
+            if (entry == null)
+            {
+                return false;
+            }
+            if (NextRaidOnly.Contains(entry))
+            {
+                return true;
+            }
+            string description = entry.Description?.Description;
+            return description != null && description.IndexOf("next raid", System.StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
         public static void PerformanceHeavy(ConfigEntryBase entry)
         {
             Mark(entry, "PERFORMANCE HEAVY");
@@ -76,6 +103,43 @@ namespace mizmii.ReClassic
                     parents.Add(parent);
                 }
             }
+        }
+
+        private static readonly Dictionary<ConfigEntryBase, List<ConfigEntry<bool>>> Conflicting = new Dictionary<ConfigEntryBase, List<ConfigEntry<bool>>>();
+
+        public static void Conflicts(ConfigEntry<bool> blocker, params ConfigEntryBase[] entries)
+        {
+            foreach (ConfigEntryBase entry in entries)
+            {
+                if (entry == null || blocker == null || entry == blocker)
+                {
+                    continue;
+                }
+                if (!Conflicting.TryGetValue(entry, out List<ConfigEntry<bool>> blockers))
+                {
+                    blockers = new List<ConfigEntry<bool>>();
+                    Conflicting[entry] = blockers;
+                }
+                if (!blockers.Contains(blocker))
+                {
+                    blockers.Add(blocker);
+                }
+            }
+        }
+
+        public static ConfigEntry<bool> ActiveConflict(ConfigEntryBase entry)
+        {
+            if (Conflicting.TryGetValue(entry, out List<ConfigEntry<bool>> blockers))
+            {
+                foreach (ConfigEntry<bool> blocker in blockers)
+                {
+                    if (blocker.Value)
+                    {
+                        return blocker;
+                    }
+                }
+            }
+            return null;
         }
 
         public static ConfigEntry<bool> MissingRequirement(ConfigEntryBase entry)

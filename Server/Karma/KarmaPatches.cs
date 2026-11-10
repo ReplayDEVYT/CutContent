@@ -53,7 +53,7 @@ public class KarmaPatches(ISptLogger<KarmaPatches> logger, KarmaService karma) :
         }
     }
 
-    private static void AssortPostfix(MongoId sessionId, MongoId traderId, TraderAssort __result)
+    private static void AssortPostfix(MongoId sessionId, MongoId traderId, ref TraderAssort __result)
     {
         KarmaService? service = KarmaService.Instance;
         if (service == null || __result?.BarterScheme == null || !service.Config.Enabled)
@@ -65,29 +65,37 @@ public class KarmaPatches(ISptLogger<KarmaPatches> logger, KarmaService karma) :
         {
             return;
         }
-        foreach (List<List<BarterScheme>> options in __result.BarterScheme.Values)
+        var schemes = new Dictionary<MongoId, List<List<BarterScheme>>>();
+        foreach (KeyValuePair<MongoId, List<List<BarterScheme>>> entry in __result.BarterScheme)
         {
-            if (options == null)
+            if (entry.Value == null)
             {
+                schemes[entry.Key] = entry.Value!;
                 continue;
             }
-            foreach (List<BarterScheme> option in options)
+            var options = new List<List<BarterScheme>>(entry.Value.Count);
+            foreach (List<BarterScheme> option in entry.Value)
             {
                 if (option == null)
                 {
+                    options.Add(option!);
                     continue;
                 }
-                for (int i = 0; i < option.Count; i++)
+                var copy = new List<BarterScheme>(option.Count);
+                foreach (BarterScheme scheme in option)
                 {
-                    BarterScheme scheme = option[i];
                     if (scheme?.Count == null || !Currencies.Contains(scheme.Template))
                     {
+                        copy.Add(scheme!);
                         continue;
                     }
-                    option[i] = scheme with { Count = Math.Max(1, Math.Round(scheme.Count.Value * multiplier)) };
+                    copy.Add(scheme with { Count = Math.Max(1, Math.Round(scheme.Count.Value * multiplier)) });
                 }
+                options.Add(copy);
             }
+            schemes[entry.Key] = options;
         }
+        __result = __result with { BarterScheme = schemes };
     }
 
     private static void TaxPostfix(PmcData pmcData, ref double __result)

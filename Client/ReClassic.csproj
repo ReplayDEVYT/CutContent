@@ -86,6 +86,14 @@
       <HintPath>C:\spt41\EscapeFromTarkov_Data\Managed\UnityEngine.AudioModule.dll</HintPath>
       <Private>False</Private>
     </Reference>
+    <Reference Include="UnityEngine.UnityWebRequestModule">
+      <HintPath>C:\spt41\EscapeFromTarkov_Data\Managed\UnityEngine.UnityWebRequestModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UnityWebRequestAudioModule">
+      <HintPath>C:\spt41\EscapeFromTarkov_Data\Managed\UnityEngine.UnityWebRequestAudioModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
     <Reference Include="UnityEngine.IMGUIModule, Version=0.0.0.0, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>C:\spt41\EscapeFromTarkov_Data\Managed\UnityEngine.IMGUIModule.dll</HintPath>
@@ -129,6 +137,7 @@
     <EmbeddedResource Include="..\Resources\**\*.png" LogicalName="ReClassic.Resources.%(Filename)%(Extension)" />
     <EmbeddedResource Include="..\Resources\footsteps.bundle" LogicalName="ReClassic.Resources.footsteps.bundle" />
     <EmbeddedResource Include="..\Resources\looting_animations.json" LogicalName="ReClassic.Resources.looting_animations.json" />
+    <EmbeddedResource Include="..\Resources\geiger_click.ogg" LogicalName="ReClassic.Resources.geiger_click.ogg" />
     <EmbeddedResource Include="..\Fika\bin\$(Configuration)\netstandard2.1\ReClassic.Fika.dll" LogicalName="ReClassic.Fika.dll" />
   </ItemGroup>
 

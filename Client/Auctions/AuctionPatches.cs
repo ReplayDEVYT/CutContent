@@ -45,6 +45,14 @@ namespace mizmii.ReClassic.Auctions
 
         public static bool Unlocked => (SPT.Reflection.Utils.PatchConstants.BackEndSession?.Profile?.Info?.Level ?? 0) >= MinLevel;
 
+        private static void RestoreStatus(RagFair ragfair)
+        {
+            if (ragfair != null && !AuctionClient.Active && ragfair.Status == RagFair.ERagFairStatus.Available)
+            {
+                ragfair.UpdateRagfairStatus();
+            }
+        }
+
         private static void UpdateStatus(RagFair ragfair)
         {
             if (ragfair == null)
@@ -219,12 +227,14 @@ namespace mizmii.ReClassic.Auctions
             if (toAuctions)
             {
                 _fleaRule = current;
-                next = _auctionRule ?? Fresh(current);
+                next = Fresh(_auctionRule ?? current);
+                _auctionRule = null;
             }
             else
             {
                 _auctionRule = current;
-                next = _fleaRule ?? Fresh(current);
+                next = Fresh(_fleaRule ?? current);
+                _fleaRule = null;
             }
             next.ViewListType = EViewListType.AllOffers;
             ragfair.CancellableFilters.Clear();
@@ -385,6 +395,7 @@ namespace mizmii.ReClassic.Auctions
                 }
                 bool alreadyOpen = OnFleaScreen();
                 AuctionClient.SetActive(true);
+                UpdateStatus(_ragfair ?? (_screen != null ? ScreenRagfair(_screen) : null));
                 if (alreadyOpen)
                 {
                     return;
@@ -556,6 +567,10 @@ namespace mizmii.ReClassic.Auctions
                     {
                         SwapRules(__instance, true);
                     }
+                    else
+                    {
+                        RestoreStatus(ScreenRagfair(__instance));
+                    }
                     ApplyScreen(__instance);
                 }
                 catch (Exception e)
@@ -584,10 +599,10 @@ namespace mizmii.ReClassic.Auctions
                 if (ragfair != null)
                 {
                     _auctionRule = ragfair.FilterRule;
-                    if (_fleaRule.HasValue)
-                    {
-                        ragfair.FilterRule = _fleaRule.Value;
-                    }
+                    FilterRule restored = Fresh(_fleaRule ?? ragfair.FilterRule);
+                    restored.ViewListType = EViewListType.AllOffers;
+                    ragfair.FilterRule = restored;
+                    _fleaRule = null;
                     ragfair.CancellableFilters.Clear();
                     ragfair.ClearCachedInfo();
                     ragfair.ForceNextUpdate = true;
@@ -595,6 +610,19 @@ namespace mizmii.ReClassic.Auctions
                 AuctionClient.Active = false;
                 AuctionClient.View = "all";
                 ApplyScreen(__instance);
+            }
+
+            [PatchPostfix]
+            private static void Postfix(RagfairScreen __instance)
+            {
+                try
+                {
+                    RestoreStatus(ScreenRagfair(__instance) ?? _ragfair);
+                }
+                catch (Exception e)
+                {
+                    Plugin.LogSource.LogError($"[Auctions] Could not restore the flea market status: {e}");
+                }
             }
         }
 

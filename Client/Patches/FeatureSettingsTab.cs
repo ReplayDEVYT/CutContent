@@ -534,18 +534,24 @@ namespace mizmii.ReClassic.Patches
                 bool synced = Sync.SettingsSync.IsSynced(entry);
                 Action refresh = () =>
                 {
-                    bool locked = synced && Sync.SettingsSync.Locked;
+                    bool locked = synced && Sync.SettingsSync.IsLocked(entry);
                     ConfigEntry<bool> missing = ConfigHelper.MissingRequirement(entry);
-                    group.interactable = !locked && missing == null;
-                    group.alpha = locked || missing != null ? 0.4f : 1f;
+                    ConfigEntry<bool> conflict = ConfigHelper.ActiveConflict(entry);
+                    bool blocked = missing != null || conflict != null;
+                    group.interactable = !locked && !blocked;
+                    group.alpha = locked || blocked ? 0.4f : 1f;
                     string text = description;
                     if (missing != null)
                     {
                         text += "\n\n<color=#9a9a9a>Requires " + missing.Definition.Key + " to be on.</color>";
                     }
+                    if (conflict != null)
+                    {
+                        text += "\n\n<color=#9a9a9a>Does not work while " + conflict.Definition.Key + " is on.</color>";
+                    }
                     if (locked)
                     {
-                        text += "\n\n<color=#d6b85a>" + Sync.SettingsSync.LockedNote + "</color>";
+                        text += "\n\n<color=#d6b85a>" + Sync.SettingsSync.NoteFor(entry) + "</color>";
                     }
                     tooltip.SetMessageText(text.Trim(), true);
                 };

@@ -104,6 +104,7 @@ namespace mizmii.ReClassic.Karma
             new FenceSellPatch().Enable();
             new ScavSellPatch().Enable();
             new FleaTaxPatch().Enable();
+            KarmaPriceTags.Enable();
             new TooltipPatch().Enable();
             new OverallStatsPatch().Enable();
 

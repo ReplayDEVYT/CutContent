@@ -170,9 +170,10 @@ namespace mizmii.ReClassic.Consciousness
                 }
 
                 bool trigger = false;
-                trigger |= Accumulate(_bleedingWithBreak, part, bleeding && (fractured || destroyed), delta, BleedingWithBreakSeconds);
-                trigger |= Accumulate(_untreatedFracture, part, fractured && pain && !painkiller, delta, UntreatedFractureSeconds);
-                trigger |= _blackedDamage.TryGetValue(part, out float shot) && shot >= BlackedLimbDamage;
+                float tough = 1f + Skills.SkillEffects.Value(Skills.SkillEffects.Agony);
+                trigger |= Accumulate(_bleedingWithBreak, part, bleeding && (fractured || destroyed), delta, BleedingWithBreakSeconds * tough);
+                trigger |= Accumulate(_untreatedFracture, part, fractured && pain && !painkiller, delta, UntreatedFractureSeconds * tough);
+                trigger |= _blackedDamage.TryGetValue(part, out float shot) && shot >= BlackedLimbDamage * tough;
                 if (trigger)
                 {
                     StartAgony(health, part);

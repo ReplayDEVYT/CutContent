@@ -205,6 +205,16 @@ namespace mizmii.ReClassic.Fika
             _unlock();
         }
 
+        public static void BroadcastSettings()
+        {
+            if (_manager == null || !FikaBackendUtils.IsServer || _snapshot == null)
+            {
+                return;
+            }
+            var packet = new SettingsPacket { Data = _snapshot() };
+            _manager.SendData(ref packet, DeliveryMethod.ReliableOrdered);
+        }
+
         private static void OnPeerConnected(PeerConnectedEvent e)
         {
             if (!FikaBackendUtils.IsServer || e.NetworkManager == null || e.Peer == null)

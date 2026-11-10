@@ -35,6 +35,7 @@ namespace mizmii.ReClassic.Sync
                 Patches.WorldInteractions.AlarmStarted += sendAlarm;
                 Type bridgeType = bridge.GetType(BridgeType, true);
                 var send = (Action<byte, string, string, float[], string, bool>)Delegate.CreateDelegate(typeof(Action<byte, string, string, float[], string, bool>), bridgeType.GetMethod("Send"));
+                SettingsSync.Broadcast = (Action)Delegate.CreateDelegate(typeof(Action), bridgeType.GetMethod("BroadcastSettings"));
                 var isServer = (Func<bool>)Delegate.CreateDelegate(typeof(Func<bool>), bridgeType.GetMethod("IsServer"));
                 var connected = (Func<bool>)Delegate.CreateDelegate(typeof(Func<bool>), bridgeType.GetMethod("Connected"));
                 var headless = (Func<bool>)Delegate.CreateDelegate(typeof(Func<bool>), bridgeType.GetMethod("IsHeadless"));
