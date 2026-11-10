@@ -317,6 +317,31 @@ namespace mizmii.ReClassic.Radiation
         }
 
         private static GameWorld _builtFor;
+        private static int? _hostSeed;
+        private static int? _usedSeed;
+        private static float _nextShare;
+
+        public static void ShareSeed()
+        {
+            if (!_usedSeed.HasValue || Time.time < _nextShare || !Consciousness.Coop.InMatch || !Consciousness.Coop.IsServer)
+            {
+                return;
+            }
+            _nextShare = Time.time + 15f;
+            Consciousness.Coop.Send(Consciousness.CoopMessage.Zones, string.Empty, extra: _usedSeed.Value.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
+
+        public static void OnRemoteSeed(int seed)
+        {
+            GameWorld world = Singleton<GameWorld>.Instance;
+            _hostSeed = seed;
+            if (world == null || !Enabled.Value || !RandomZones.Value || _usedSeed == seed)
+            {
+                return;
+            }
+            Plugin.LogSource.LogInfo("[Radiation] Using the host's random zones.");
+            Build(world, true);
+        }
 
         public static void EnsureBuilt()
         {
@@ -399,7 +424,9 @@ namespace mizmii.ReClassic.Radiation
             {
                 return;
             }
-            var random = new System.Random(Seed(world));
+            int seed = _hostSeed ?? Seed(world);
+            _usedSeed = seed;
+            var random = new System.Random(seed);
             int wanted = RandomCount.Value;
             for (int attempt = 0; attempt < wanted * 6 && Active.Count(z => z.Random) < wanted; attempt++)
             {
@@ -436,6 +463,9 @@ namespace mizmii.ReClassic.Radiation
                 {
                     Active.Clear();
                     BotHazards.Reset();
+                    _hostSeed = null;
+                    _usedSeed = null;
+                    _nextShare = 0f;
                     Effects.CustomEffects.EnsureNamedIcons();
                     _builtFor = __instance;
                     if (Enabled.Value)

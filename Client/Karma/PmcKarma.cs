@@ -99,6 +99,7 @@ namespace mizmii.ReClassic.Karma
 
             KarmaTracker.Hook();
             new AddEnemyPatch().Enable();
+            new MemoryEnemyPatch().Enable();
             new GesturePatch().Enable();
             new ThrowItemPatch().Enable();
             new FenceSellPatch().Enable();
@@ -160,6 +161,27 @@ namespace mizmii.ReClassic.Karma
                 }
                 __result = false;
                 return false;
+            }
+        }
+
+        private class MemoryEnemyPatch : ModulePatch
+        {
+            protected override MethodBase GetTargetMethod()
+            {
+                return AccessTools.Method(typeof(BotMemory), nameof(BotMemory.AddEnemy));
+            }
+
+            [PatchPrefix]
+            private static bool Prefix(BotMemory __instance, IPlayer enemy)
+            {
+                try
+                {
+                    return HelpRequests.AllowEnemy(__instance._owner?.BotsGroup, enemy);
+                }
+                catch (Exception)
+                {
+                    return true;
+                }
             }
         }
 

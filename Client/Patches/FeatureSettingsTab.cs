@@ -1,4 +1,5 @@
 using BepInEx.Configuration;
+using EFT.InputSystem;
 using EFT.UI;
 using EFT.UI.Settings;
 using HarmonyLib;
@@ -53,6 +54,7 @@ namespace mizmii.ReClassic.Patches
             new AwakePatch().Enable();
             new ShowScreenPatch().Enable();
             new ClosePatch().Enable();
+            new EscapePatch().Enable();
         }
 
         private sealed class Kit
@@ -309,12 +311,22 @@ namespace mizmii.ReClassic.Patches
                 }
             }
 
-            private void Update()
+            public bool CloseTop()
             {
-                if (Input.GetKeyDown(KeyCode.Escape))
+                foreach (DropDownBox dropdown in _dropdowns)
+                {
+                    if (dropdown != null && dropdown.CurrentState)
+                    {
+                        dropdown.Close();
+                        return true;
+                    }
+                }
+                if (gameObject.activeSelf)
                 {
                     Close();
+                    return true;
                 }
+                return false;
             }
 
             private void OnEnable()
@@ -1036,6 +1048,38 @@ namespace mizmii.ReClassic.Patches
             private static void Postfix(SettingsScreen __instance)
             {
                 Hide(__instance);
+            }
+        }
+
+        private class EscapePatch : ModulePatch
+        {
+            protected override MethodBase GetTargetMethod()
+            {
+                return AccessTools.Method(typeof(SettingsScreen), nameof(SettingsScreen.TranslateCommand));
+            }
+
+            [PatchPrefix]
+            private static bool Prefix(SettingsScreen __instance, ECommand command, ref InputNode.ETranslateResult __result)
+            {
+                try
+                {
+                    if (!command.IsCommand(ECommand.Escape))
+                    {
+                        return true;
+                    }
+                    FeatureTab tab = __instance.GetComponent<FeatureTab>();
+                    if (tab == null || tab.Window == null || !tab.Window.CloseTop())
+                    {
+                        return true;
+                    }
+                    __result = InputNode.ETranslateResult.BlockAll;
+                    return false;
+                }
+                catch (Exception e)
+                {
+                    Plugin.LogSource.LogWarning($"[Settings] Could not close the popup: {e.Message}");
+                    return true;
+                }
             }
         }
 

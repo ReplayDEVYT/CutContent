@@ -161,10 +161,16 @@ namespace mizmii.ReClassic.Consciousness
                     TimeSkip.Start(skipSeconds, minutes);
                     _ownTimeSkip = true;
                 });
-                yield return new WaitForSecondsRealtime(duration);
+                float waited = 0f;
+                while (waited < duration && !_revived)
+                {
+                    waited += Time.unscaledDeltaTime;
+                    yield return null;
+                }
                 Step("return the raid to normal speed", StopSimulation);
                 Step("stop the time skip", StopOwnTimeSkip);
-                float passed = Mathf.Max(0f, minutes * 60f / ClockFactor() - duration);
+                float share = duration > 0f ? Mathf.Clamp01(waited / duration) : 1f;
+                float passed = Mathf.Max(0f, minutes * 60f / ClockFactor() * share - waited);
                 Step("let the time pass for the body", () => Blackout.PassTime(Player, passed));
             }
             else

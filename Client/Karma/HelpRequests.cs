@@ -1,6 +1,7 @@
 using CommonAssets.Scripts.Game;
 using Comfort.Common;
 using EFT;
+using EFT.Communications;
 using EFT.Interactive;
 using EFT.InventoryLogic;
 using mizmii.ReClassic.Consciousness;
@@ -8,6 +9,7 @@ using mizmii.ReClassic.Patches;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using UnityEngine;
 
 namespace mizmii.ReClassic.Karma
@@ -56,6 +58,7 @@ namespace mizmii.ReClassic.Karma
         public float LeaveAt;
         public LootItem Pending;
         public float ConsumeAt;
+        public float ReviveStart;
         public readonly Dictionary<string, float> Damage = new Dictionary<string, float>();
 
         public BotOwner Owner => Bot?.AIData?.BotOwner;
@@ -70,6 +73,12 @@ namespace mizmii.ReClassic.Karma
         private const float AllyTimeout = 1200f;
         private const float AnswerRange = 30f;
         private const float GestureRange = 25f;
+        private const float ReviveRange = 2.2f;
+        private const float ReviveSeconds = 5f;
+        private const string FireteamGuid = "xyz.pit.fireteam";
+
+        private static Func<string, bool> _isFireteamFollower;
+        private static bool _fireteamChecked;
 
         private static readonly Dictionary<string, Pact> Pacts = new Dictionary<string, Pact>();
         private static readonly Dictionary<string, HashSet<string>> Agreed = new Dictionary<string, HashSet<string>>();
@@ -123,6 +132,10 @@ namespace mizmii.ReClassic.Karma
                 case PactState.Leaving:
                     return BrainMode.Wait;
                 case PactState.Allied:
+                    if (pact.Ally != null && Alive(pact.Ally) && IsAllyDown(pact.Ally))
+                    {
+                        return BrainMode.Follow;
+                    }
                     return pact.Holding || pact.Ally == null || !Alive(pact.Ally) ? BrainMode.Wait : BrainMode.Follow;
                 default:
                     return BrainMode.None;
@@ -145,18 +158,138 @@ namespace mizmii.ReClassic.Karma
 
         public static bool AllowEnemy(BotsGroup group, IPlayer person)
         {
-            if (Pacts.Count == 0 || group == null || person == null || person.IsAI)
+            if (Pacts.Count == 0 || group == null || person == null)
             {
                 return true;
             }
             foreach (Pact pact in Pacts.Values)
             {
-                if (pact.Group == group)
+                if (pact.Group == group && (!person.IsAI || IsFireteamFollower(person)))
                 {
                     return false;
                 }
             }
+            if (person.IsAI && Pacts.ContainsKey(person.ProfileId) && IsFireteamGroup(group))
+            {
+                return false;
+            }
             return true;
+        }
+
+        public static bool IsAllyDown(Player player)
+        {
+            if (player == null)
+            {
+                return false;
+            }
+            return Coop.IsDown(player) || (player.IsYourPlayer && Knockout.Active != null);
+        }
+
+        public static bool IsFireteamFollower(IPlayer person)
+        {
+            if (person == null || !person.IsAI)
+            {
+                return false;
+            }
+            if (!_fireteamChecked)
+            {
+                _fireteamChecked = true;
+                try
+                {
+                    if (BepInEx.Bootstrap.Chainloader.PluginInfos.ContainsKey(FireteamGuid))
+                    {
+                        Type type = HarmonyLib.AccessTools.TypeByName("pitTeam.Modules.BossPlayers");
+                        MethodInfo method = type != null ? HarmonyLib.AccessTools.Method(type, "IsFollowerProfileId", new[] { typeof(string) }) : null;
+                        if (method != null && method.IsStatic)
+                        {
+                            _isFireteamFollower = (Func<string, bool>)Delegate.CreateDelegate(typeof(Func<string, bool>), method);
+                            Plugin.LogSource.LogInfo("[PMC Karma] PIT Fire Team found, its squadmates will leave PMCs you're helping alone.");
+                        }
+                    }
+                }
+                catch (Exception e)
+                {
+                    Plugin.LogSource.LogWarning($"[PMC Karma] Could not link up with PIT Fire Team: {e.Message}");
+                }
+            }
+            if (_isFireteamFollower == null)
+            {
+                return false;
+            }
+            try
+            {
+                return _isFireteamFollower(person.ProfileId);
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        private static bool IsFireteamGroup(BotsGroup group)
+        {
+            if (group == null)
+            {
+                return false;
+            }
+            for (int i = 0; i < group.MembersCount; i++)
+            {
+                BotOwner member = group.Member(i);
+                if (member != null && IsFireteamFollower(member.GetPlayer))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private static void MakePeace(Pact pact)
+        {
+            BotsGroup group = pact.Group;
+            foreach (Player human in PlayerKind.Humans())
+            {
+                if (!Alive(human))
+                {
+                    continue;
+                }
+                try
+                {
+                    group?.RemoveEnemy(human);
+                    if (pact.State == PactState.Allied)
+                    {
+                        group?.AddAlly(human);
+                    }
+                    else
+                    {
+                        group?.AddNeutral(human);
+                    }
+                }
+                catch (Exception e)
+                {
+                    Plugin.LogSource.LogWarning($"[PMC Karma] Could not calm {pact.Name} down: {e.Message}");
+                }
+            }
+            GameWorld world = Singleton<GameWorld>.Instance;
+            if (world == null)
+            {
+                return;
+            }
+            foreach (Player other in world.AllAlivePlayersList)
+            {
+                if (other == null || other == pact.Bot || !IsFireteamFollower(other))
+                {
+                    continue;
+                }
+                try
+                {
+                    other.AIData?.BotOwner?.BotsGroup?.RemoveEnemy(pact.Bot);
+                    group?.RemoveEnemy(other);
+                }
+                catch (Exception e)
+                {
+                    Plugin.LogSource.LogWarning($"[PMC Karma] Could not keep the squad off {pact.Name}: {e.Message}");
+                }
+            }
         }
 
         public static bool Alive(Player player)
@@ -400,18 +533,7 @@ namespace mizmii.ReClassic.Karma
             var pact = new Pact { Bot = bot, State = PactState.Requesting, Since = Time.time, NextPhrase = Time.time + 25f };
             Pacts[bot.ProfileId] = pact;
             _requests++;
-            foreach (Player human in Humans())
-            {
-                try
-                {
-                    group.RemoveEnemy(human);
-                    group.AddNeutral(human);
-                }
-                catch (Exception e)
-                {
-                    Plugin.LogSource.LogWarning($"[PMC Karma] Could not calm {pact.Name} down: {e.Message}");
-                }
-            }
+            MakePeace(pact);
             BotVoice.Say(bot, EPhraseTrigger.Cooperation, false, EPhraseTrigger.NeedHelp);
             Plugin.LogSource.LogInfo($"[PMC Karma] {pact.Name} ({pact.Faction}) is asking for help.");
             foreach (Player human in Humans())
@@ -541,18 +663,7 @@ namespace mizmii.ReClassic.Karma
                 Agreed[pact.Bot.ProfileId] = agreed;
             }
             agreed.Add(human.ProfileId);
-            BotsGroup group = pact.Group;
-            foreach (Player other in Humans())
-            {
-                try
-                {
-                    group?.RemoveEnemy(other);
-                    group?.AddAlly(other);
-                }
-                catch (Exception)
-                {
-                }
-            }
+            MakePeace(pact);
             List<HelpTask> needs = Needs(pact.Bot);
             pact.Task = needs.Count > 0 ? needs[0] : (BrainAvailable ? HelpTask.Escort : HelpTask.Ammo);
             Weapon weapon = pact.Bot.HandsController?.Item as Weapon ?? pact.Owner?.WeaponManager?.CurrentWeapon;
@@ -841,6 +952,12 @@ namespace mizmii.ReClassic.Karma
                         Consume(pact);
                         return;
                     }
+                    if (IsAllyDown(pact.Ally))
+                    {
+                        Revive(pact);
+                        return;
+                    }
+                    pact.ReviveStart = 0f;
                     if (pact.Task == HelpTask.Escort && AtExtract(pact))
                     {
                         Complete(pact);
@@ -860,6 +977,44 @@ namespace mizmii.ReClassic.Karma
                         }
                     }
                     break;
+            }
+        }
+
+        private static void Revive(Pact pact)
+        {
+            Player ally = pact.Ally;
+            if ((ally.Position - pact.Bot.Position).sqrMagnitude > ReviveRange * ReviveRange)
+            {
+                pact.ReviveStart = 0f;
+                return;
+            }
+            if (pact.ReviveStart <= 0f)
+            {
+                pact.ReviveStart = Time.time;
+                BotVoice.Say(pact.Bot, EPhraseTrigger.Cooperation, false, EPhraseTrigger.Roger);
+                if (ally.IsYourPlayer)
+                {
+                    NotificationManager.DisplayMessageNotification($"{pact.Name} is waking you up...");
+                }
+                else
+                {
+                    Coop.Send(CoopMessage.Reviving, ally.ProfileId, pact.Bot.ProfileId, new[] { 1f }, pact.Name);
+                }
+                return;
+            }
+            if (Time.time - pact.ReviveStart < ReviveSeconds)
+            {
+                return;
+            }
+            pact.ReviveStart = 0f;
+            Plugin.LogSource.LogInfo($"[PMC Karma] {pact.Name} woke {ally.Profile.Nickname} up.");
+            if (ally.IsYourPlayer)
+            {
+                Knockout.Active?.Revive(false, pact.Name);
+            }
+            else
+            {
+                Coop.Send(CoopMessage.Revive, ally.ProfileId, pact.Bot.ProfileId, new[] { 0f }, pact.Name);
             }
         }
 

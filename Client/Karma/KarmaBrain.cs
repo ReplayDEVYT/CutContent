@@ -130,22 +130,23 @@ namespace mizmii.ReClassic.Karma
             }
             Vector3 position = target.Position;
             float distance = (position - BotOwner.Position).magnitude;
-            bool crouch = target.MovementContext.PoseLevel < 0.5f;
-            BotOwner.SetPose(crouch ? 0.3f : 1f);
-            if (distance < 4f)
+            bool down = HelpRequests.IsAllyDown(target);
+            bool crouch = down || target.MovementContext.PoseLevel < 0.5f;
+            BotOwner.SetPose(crouch && (!down || distance < 3f) ? 0.3f : 1f);
+            if (distance < (down ? 1.4f : 4f))
             {
                 BotOwner.StopMove();
                 BotOwner.Sprint(false);
                 BotOwner.Steering.LookToPoint(position + Vector3.up * 1.4f);
                 return;
             }
-            bool sprint = !crouch && distance > 14f && BotOwner.CanSprintPlayer;
+            bool sprint = (down || !crouch) && distance > (down ? 6f : 14f) && BotOwner.CanSprintPlayer;
             BotOwner.SetTargetMoveSpeed(1f);
             BotOwner.Sprint(sprint);
             if (Time.time >= _nextPath)
             {
                 _nextPath = Time.time + (distance > 20f ? 1f : 0.5f);
-                Vector3 behind = position - (position - BotOwner.Position).normalized * 2.5f;
+                Vector3 behind = position - (position - BotOwner.Position).normalized * (down ? 0.9f : 2.5f);
                 if (BotOwner.GoToPoint(behind, true, 1.5f) != UnityEngine.AI.NavMeshPathStatus.PathComplete)
                 {
                     BotOwner.GoToPoint(position, true, 2.5f, false, false);

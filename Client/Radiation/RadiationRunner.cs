@@ -83,6 +83,7 @@ namespace mizmii.ReClassic.Radiation
         {
             try
             {
+                RadiationZones.ShareSeed();
                 Tick(Time.deltaTime);
             }
             catch (Exception e)

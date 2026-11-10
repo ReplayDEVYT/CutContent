@@ -30,7 +30,8 @@ namespace mizmii.ReClassic.Consciousness
         Mortar = 10,
         RaidClock = 11,
         Karma = 12,
-        KarmaNotice = 13
+        KarmaNotice = 13,
+        Zones = 14
     }
 
     internal static class Coop
@@ -243,6 +244,12 @@ namespace mizmii.ReClassic.Consciousness
                     break;
                 case CoopMessage.Karma:
                     Karma.KarmaClient.OnRemoteKarma(target, values, extra);
+                    break;
+                case CoopMessage.Zones:
+                    if (!IsServer && int.TryParse(extra, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out int seed))
+                    {
+                        Radiation.RadiationZones.OnRemoteSeed(seed);
+                    }
                     break;
                 case CoopMessage.KarmaNotice:
                     Karma.KarmaClient.OnRemoteNotice(target, extra);

@@ -3,6 +3,7 @@ using EFT;
 using EFT.Interactive;
 using HarmonyLib;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
@@ -32,6 +33,8 @@ namespace mizmii.ReClassic.Patches
         private static float _startTime;
         private static FirearmsAnimator _hands;
         private static bool _executed;
+        private static bool _waitingForOpen;
+        private static bool _releasing;
         private static Transform _movedGrip;
         private static Transform _gripParent;
         private static Vector3 _gripLocalPosition;
@@ -498,11 +501,51 @@ namespace mizmii.ReClassic.Patches
 
         private static bool CallbackPrefix(Player __instance, LootableContainer container)
         {
-            if (container == null || __instance != _player || container != _target || !Ours(__instance.MovementContext))
+            if (_releasing || container == null || __instance != _player || container != _target || !Ours(__instance.MovementContext))
             {
                 return true;
             }
-            return container.DoorState == EDoorState.Open;
+            if (container.DoorState == EDoorState.Open)
+            {
+                return true;
+            }
+            if (!_waitingForOpen)
+            {
+                _waitingForOpen = true;
+                __instance.StartCoroutine(OpenWhenReady(__instance, container));
+            }
+            return false;
+        }
+
+        private static IEnumerator OpenWhenReady(Player player, LootableContainer container)
+        {
+            float giveUp = Time.time + 6f;
+            while (player != null && container != null && container.DoorState != EDoorState.Open && Time.time < giveUp)
+            {
+                if (container.DoorState == EDoorState.Shut && !(player.CurrentManagedState is DoorInteractState) && Time.time - _startTime > 0.5f)
+                {
+                    break;
+                }
+                yield return null;
+            }
+            _waitingForOpen = false;
+            if (player == null || container == null || !player.HealthController.IsAlive || container.DoorState == EDoorState.Shut || container.DoorState == EDoorState.Locked)
+            {
+                yield break;
+            }
+            _releasing = true;
+            try
+            {
+                player.TryInteractionCallback(container);
+            }
+            catch (Exception e)
+            {
+                Plugin.LogSource.LogWarning($"[Full Interactions] Could not open the container: {e.Message}");
+            }
+            finally
+            {
+                _releasing = false;
+            }
         }
 
         private static void SnapPostfix(WorldInteractiveObject __instance, Vector3 yourPosition, ref WorldInteractiveObject.InteractionParameters __result)

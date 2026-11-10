@@ -72,7 +72,6 @@ namespace mizmii.ReClassic.Patches
             { BaseBallistic.ESurfaceSound.WoodThick, new Set("hops_footstep_wood", "hops_footstep_wood") },
             { BaseBallistic.ESurfaceSound.WoodThin, new Set("hops_footstep_wood", "hops_footstep_wood") },
             { BaseBallistic.ESurfaceSound.Soil, new Set("hops_walk_soil", "hops_fs_sand_sprint") },
-            { BaseBallistic.ESurfaceSound.Grass, new Set("hops_movement_grass", "hops_movement_grass") },
             { BaseBallistic.ESurfaceSound.Gravel, new Set("hops_fs_gravel_run", "hops_fs_gravel_sprint") },
             { BaseBallistic.ESurfaceSound.Glass, new Set("hops_fs_run_glass", "hops_fs_sprint_glass", "hops_fs_crouch_glass") },
             { BaseBallistic.ESurfaceSound.WholeGlass, new Set("hops_fs_run_glass", "hops_fs_sprint_glass", "hops_fs_crouch_glass") },
