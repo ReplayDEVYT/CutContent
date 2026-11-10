@@ -1,4 +1,5 @@
 using BepInEx.Configuration;
+using UnityEngine;
 using HarmonyLib;
 using System.Collections.Generic;
 using System.Reflection;
@@ -31,6 +32,20 @@ namespace mizmii.ReClassic
 
     internal static class ConfigHelper
     {
+        public static ConfigEntry<KeyboardShortcut> DebugKey(ConfigFile config, string section, string name, string description)
+        {
+#if DEBUG
+            return config.Bind(section, name, new KeyboardShortcut(KeyCode.None), description);
+#else
+            return null;
+#endif
+        }
+
+        public static bool Pressed(ConfigEntry<KeyboardShortcut> key)
+        {
+            return key != null && key.Value.IsDown();
+        }
+
         public const string MainSection = "Main Features";
 
         public static readonly List<SettingInfo> Settings = new List<SettingInfo>();

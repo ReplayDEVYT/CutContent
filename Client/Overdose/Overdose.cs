@@ -70,7 +70,7 @@ namespace mizmii.ReClassic.Overdose
                 "Stimulants and painkillers carry a Drug Level, shown on the item. Every dose adds to a hidden meter that slowly wears off. At 50 you Overdose: you lose consciousness fast, your thorax takes damage, your arm and leg stamina is capped at 50% and you breathe heavily. Past 80 your whole body starts taking damage, and you also wheeze like you're dying, limp even on painkillers, move slower, shake badly, lose your peripheral vision, feel pain and slump over. At 100 your heart stops. The xTG-12 antidote injector clears an overdose quickly and gives you Adrenaline, but sends your blood pressure and temperature up and empties your stamina. Some drinks and drugs also take the edge off Stress.",
                 Section, "Enabled");
             DamageScale = config.Bind(Section, "Damage Scale", 1f, new ConfigDescription("How much an overdose hurts your thorax. 0 turns the damage off.", new AcceptableValueRange<float>(0f, 3f)));
-            LogDrugs = config.Bind(Section, "Log Drug Level", new KeyboardShortcut(KeyCode.None), "Prints your hidden drug level to the BepInEx log.");
+            LogDrugs = ConfigHelper.DebugKey(config, Section, "Log Drug Level", "Prints your hidden drug level to the BepInEx log.");
             ConfigHelper.Requires(Enabled, DamageScale, LogDrugs);
 
             Effects.AttributeIcons.Register(DrugAttribute, () => Effects.CustomEffects.Icon("effect_overpk.png"));

@@ -3,7 +3,7 @@ using BepInEx.Logging;
 
 namespace mizmii.ReClassic
 {
-    [BepInPlugin(Guid, "Re-Classic", "1.2.0")]
+    [BepInPlugin(Guid, "Re-Classic", "1.3.0")]
     [BepInDependency("xyz.drakia.searchopencontainers")]
     [BepInDependency("com.fika.core", BepInDependency.DependencyFlags.SoftDependency)]
     [BepInDependency("xyz.drakia.bigbrain", BepInDependency.DependencyFlags.SoftDependency)]
@@ -102,7 +102,9 @@ namespace mizmii.ReClassic
             Start("Blood Pressure", () => Pressure.BloodPressure.Enable(Config));
             Start("Stress", () => Stress.Stress.Enable(Config));
             Start("Overdose", () => Overdose.Overdose.Enable(Config));
+#if DEBUG
             Start("Developer Tools", () => Dev.DevTools.Enable(Config));
+#endif
             Start("Flashlight Beam", () => Patches.FlashlightCookie.Enable(Config));
             Start("Grenade Quick Throw", () => Patches.QuickThrow.Enable(Config));
             Start("Map Guides", () => Patches.MapGuides.Enable(Config));

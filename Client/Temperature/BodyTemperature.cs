@@ -44,7 +44,7 @@ namespace mizmii.ReClassic.Temperature
             Strength = config.Bind(Section, "Environment Strength", 1f, new ConfigDescription("How hard the weather, time of day and everything else push your temperature away from normal. 1 is the default.", new AcceptableValueRange<float>(0.25f, 2f)));
             Speed = config.Bind(Section, "Change Speed", 1f, new ConfigDescription("How fast your temperature moves. 1 takes several minutes to get cold in a winter night.", new AcceptableValueRange<float>(0.25f, 4f)));
             DamageScale = config.Bind(Section, "Overheating Damage", 1f, new ConfigDescription("How much Overheating hurts. 0 turns the damage off.", new AcceptableValueRange<float>(0f, 3f)));
-            LogTemperature = config.Bind(Section, "Log Temperature", new KeyboardShortcut(KeyCode.None), "Prints your temperature and everything affecting it to the BepInEx log.");
+            LogTemperature = ConfigHelper.DebugKey(config, Section, "Log Temperature", "Prints your temperature and everything affecting it to the BepInEx log.");
             ConfigHelper.Requires(Enabled, Strength, Speed, DamageScale, LogTemperature);
 
             new GameStartedPatch().Enable();

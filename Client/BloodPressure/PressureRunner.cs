@@ -159,7 +159,7 @@ namespace mizmii.ReClassic.Pressure
                 return;
             }
 
-            bool log = BloodPressure.LogPressure.Value.IsDown();
+            bool log = ConfigHelper.Pressed(BloodPressure.LogPressure);
             if (Time.time >= _nextSample || log)
             {
                 _nextSample = Time.time + 0.5f;

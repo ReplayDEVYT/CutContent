@@ -128,7 +128,7 @@ namespace mizmii.ReClassic.Overdose
             }
             Level = Mathf.Max(0f, Level - WearOffPerSecond * dt);
 
-            if (Overdose.LogDrugs.Value.IsDown())
+            if (ConfigHelper.Pressed(Overdose.LogDrugs))
             {
                 Plugin.LogSource.LogInfo($"[Overdose] Drug level {Level:0.0}, still absorbing {_pending:0.0}.");
             }

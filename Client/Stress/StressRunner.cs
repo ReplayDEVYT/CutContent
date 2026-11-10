@@ -232,7 +232,7 @@ namespace mizmii.ReClassic.Stress
                 Poll(player);
             }
 
-            if (Stress.LogStress.Value.IsDown())
+            if (ConfigHelper.Pressed(Stress.LogStress))
             {
                 Plugin.LogSource.LogInfo($"[Stress] Level {Level:0}, {(Stressed ? "stressed" : "calm")}, severity {Severity:0.00}, {(InCombat ? "in combat" : "out of combat")}, resistance {Resistance * 100f:0}%.");
             }

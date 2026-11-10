@@ -66,7 +66,7 @@ namespace mizmii.ReClassic.Pressure
             Strength = config.Bind(Section, "Strength", 1f, new ConfigDescription("How hard bleeding, stimulants, painkillers and everything else push your blood pressure. 1 is the default.", new AcceptableValueRange<float>(0.25f, 2f)));
             Speed = config.Bind(Section, "Change Speed", 1f, new ConfigDescription("How fast your blood pressure follows. 1 takes about a minute to settle.", new AcceptableValueRange<float>(0.25f, 4f)));
             DamageScale = config.Bind(Section, "Damage Scale", 1f, new ConfigDescription("How much high blood pressure and passing out with severe blood pressure hurt. 0 turns the damage off.", new AcceptableValueRange<float>(0f, 3f)));
-            LogPressure = config.Bind(Section, "Log Blood Pressure", new KeyboardShortcut(UnityEngine.KeyCode.None), "Prints your blood pressure and everything affecting it to the BepInEx log.");
+            LogPressure = ConfigHelper.DebugKey(config, Section, "Log Blood Pressure", "Prints your blood pressure and everything affecting it to the BepInEx log.");
             ConfigHelper.Requires(Enabled, Strength, Speed, DamageScale, LogPressure);
 
             new GameStartedPatch().Enable();

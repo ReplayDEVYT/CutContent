@@ -125,8 +125,12 @@ namespace mizmii.ReClassic.Radiation
                 _nextGearCheck = Time.time + 0.5f;
                 _hasGeiger = RadiationZones.HasGeiger(player);
                 _hasAnalyzer = RadiationZones.HasAnalyzer(player);
-                bool maskOn = RadiationZones.WearsMask(player) || Dev.DevTools.ForceMask;
-                bool fullMaskOn = RadiationZones.WearsFullMask(player) || Dev.DevTools.ForceMask;
+                bool maskOn = RadiationZones.WearsMask(player);
+                bool fullMaskOn = RadiationZones.WearsFullMask(player);
+#if DEBUG
+                maskOn |= Dev.DevTools.ForceMask;
+                fullMaskOn |= Dev.DevTools.ForceMask;
+#endif
                 if (maskOn != _maskOn || fullMaskOn != _fullMaskOn)
                 {
                     _maskOn = maskOn;
@@ -152,7 +156,7 @@ namespace mizmii.ReClassic.Radiation
             }
             float takenRadiation = radiation * (1f - RadiationZones.Protection(player, Hazard.Radiation));
             float takenChemical = chemical * (1f - RadiationZones.Protection(player, Hazard.Chemical));
-            if (RadiationZones.LogPosition.Value.IsDown())
+            if (ConfigHelper.Pressed(RadiationZones.LogPosition))
             {
                 Vector3 p = player.Position;
                 Plugin.LogSource.LogInfo($"[Radiation] {Singleton<GameWorld>.Instance.LocationId} position x {p.x:0.0} y {p.y:0.0} z {p.z:0.0}, radiation {radiation:0.00} (taking {takenRadiation:0.00}), chemicals {chemical:0.00} (taking {takenChemical:0.00}), radiation level {Meters.Radiation.Level:0.0}, toxicity {Meters.Toxicity.Level:0.0}.");

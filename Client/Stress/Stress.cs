@@ -30,7 +30,7 @@ namespace mizmii.ReClassic.Stress
             BuildUp = config.Bind(Section, "Build Up", 1f, new ConfigDescription("How fast stress builds up. 1 is the default.", new AcceptableValueRange<float>(0.25f, 3f)));
             Voice = config.Bind(Section, "Call Outs", true, "Let your character call out and shout back at taunts on their own while stressed.");
             Breathing = config.Bind(Section, "Heavy Breathing", true, "Breathe heavily while stressed, even with full stamina.");
-            LogStress = config.Bind(Section, "Log Stress", new KeyboardShortcut(KeyCode.None), "Prints your stress level to the BepInEx log.");
+            LogStress = ConfigHelper.DebugKey(config, Section, "Log Stress", "Prints your stress level to the BepInEx log.");
             ConfigHelper.Requires(Enabled, BuildUp, Voice, Breathing, LogStress);
 
             new GameStartedPatch().Enable();

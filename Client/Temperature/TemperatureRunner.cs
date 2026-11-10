@@ -139,9 +139,9 @@ namespace mizmii.ReClassic.Temperature
             if (Time.time >= _nextSample)
             {
                 _nextSample = Time.time + 0.5f;
-                _target = Target(player, health, BodyTemperature.LogTemperature.Value.IsDown());
+                _target = Target(player, health, ConfigHelper.Pressed(BodyTemperature.LogTemperature));
             }
-            else if (BodyTemperature.LogTemperature.Value.IsDown())
+            else if (ConfigHelper.Pressed(BodyTemperature.LogTemperature))
             {
                 Target(player, health, true);
             }

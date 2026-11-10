@@ -143,7 +143,7 @@ namespace mizmii.ReClassic.Radiation
             ScreenEffect = config.Bind(Section, "Screen Effect", true, "Your vision closes in a little while you are being irradiated or poisoned, and stays that way while your radiation is high.");
             ScreenStrength = config.Bind(Section, "Screen Effect Strength", 0.7f, new ConfigDescription("How strong the tunnel vision gets at its worst.", new AcceptableValueRange<float>(0.1f, 1f)));
             GeigerVolume = config.Bind(Section, "Geiger Counter Volume", 0.6f, new ConfigDescription("How loud the Geiger-Muller counter clicks while you carry one in a radiation zone.", new AcceptableValueRange<float>(0f, 1f)));
-            LogPosition = config.Bind(Section, "Log Position", new KeyboardShortcut(KeyCode.None), "Prints where you are standing and the radiation there to the BepInEx log, to help place zones in " + FileName + ".");
+            LogPosition = ConfigHelper.DebugKey(config, Section, "Log Position", "Prints where you are standing and the radiation there to the BepInEx log, to help place zones in " + FileName + ".");
             AnalyzerVolume = config.Bind(Section, "Gas Analyzer Volume", 0.5f, new ConfigDescription("How loud the Gas analyzer beeps while you carry one in a chemical zone. It beeps faster the stronger the chemicals are.", new AcceptableValueRange<float>(0f, 1f)));
             ConfigHelper.Requires(Enabled, RandomZones, RandomCount, DamageScale, ScreenEffect, ScreenStrength, GeigerVolume, AnalyzerVolume, LogPosition);
             ConfigHelper.NextRaid(Enabled, RandomZones, RandomCount);
